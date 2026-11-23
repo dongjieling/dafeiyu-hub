@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline';" />
+  <title>大肥鱼中转站</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">大</div>
+      <div class="brand-text">
+        <strong>大肥鱼中转站</strong>
+        <span>memory hub</span>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <button class="nav-item active" data-page="status">状态</button>
+      <button class="nav-item" data-page="config">配置</button>
+      <button class="nav-item" data-page="logs">日志</button>
+      <button class="nav-item disabled" data-page="memory" disabled>记忆<span class="badge">v1.1</span></button>
+    </nav>
+
+    <div class="sidebar-foot">
+      <span id="version">v0.1.0</span>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- 状态页 -->
+    <section class="page active" id="page-status">
+      <header class="page-head">
+        <h1>状态</h1>
+        <div class="actions">
+          <button class="btn primary" id="btn-start">启动服务</button>
+          <button class="btn" id="btn-stop">停止服务</button>
+          <button class="btn ghost" id="btn-check">重新检测</button>
+        </div>
+      </header>
+
+      <div class="status-hero">
+        <div class="dot" id="hero-dot"></div>
+        <div>
+          <div class="hero-title" id="hero-title">服务未启动</div>
+          <div class="hero-sub" id="hero-sub">点击「启动服务」开始</div>
+        </div>
+      </div>
+
+      <div class="lights">
+        <div class="light" id="light-server">
+          <div class="light-head"><span class="dot"></span><strong>本地服务</strong></div>
+          <div class="light-body">127.0.0.1:8787</div>
+        </div>
+        <div class="light" id="light-hub">
+          <div class="light-head"><span class="dot"></span><strong>记忆库</strong></div>
+          <div class="light-body">LivingMemory</div>
+        </div>
+        <div class="light" id="light-model">
+          <div class="light-head"><span class="dot"></span><strong>上游模型</strong></div>
+          <div class="light-body">DeepSeek</div>
+        </div>
+      </div>
+
+      <div class="cards">
+        <div class="card">
+          <div class="card-label">服务地址</div>
+          <div class="card-value mono" id="val-addr">—</div>
+        </div>
+        <div class="card">
+          <div class="card-label">人格</div>
+          <div class="card-value" id="val-persona">—</div>
+        </div>
+        <div class="card">
+          <div class="card-label">上游模型</div>
+          <div class="card-value mono" id="val-model">—</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Python</div>
+          <div class="card-value mono small" id="val-python">—</div>
+        </div>
+      </div>
+
+      <div class="hint">
+        <strong>在 AIRI 里接入：</strong>
+        设置 → 服务来源 → 聊天 → OpenAI 兼容，Base URL 填
+        <code>http://127.0.0.1:8787/v1</code>，API Key 填 <code>local</code>，模型填 <code>deepseek-chat</code>。
+      </div>
+    </section>
+
+    <!-- 配置页 -->
+    <section class="page" id="page-config">
+      <header class="page-head">
+        <h1>配置</h1>
+        <div class="actions">
+          <button class="btn primary" id="btn-save">保存</button>
+          <button class="btn ghost" id="btn-open-logs">打开数据目录</button>
+        </div>
+      </header>
+
+      <div class="form">
+        <label class="field">
+          <span>服务端口</span>
+          <input type="number" id="cfg-port" min="1024" max="65535" />
+          <em>默认 8787，改动后需重启服务</em>
+        </label>
+
+        <label class="field">
+          <span>Python 路径</span>
+          <input type="text" id="cfg-python" />
+          <em>用于启动 sidecar，一般指向 AstrBot 内置的 python.exe</em>
+        </label>
+
+        <label class="field checkbox">
+          <input type="checkbox" id="cfg-autostart" />
+          <span>打开应用时自动启动服务</span>
+        </label>
+      </div>
+
+      <div class="hint">
+        配置保存在 <code>%APPDATA%\dafeiyu-hub\config.json</code>。记忆库、提炼、归档等选项在后续版本加入。
+      </div>
+    </section>
+
+    <!-- 日志页 -->
+    <section class="page" id="page-logs">
+      <header class="page-head">
+        <h1>日志</h1>
+        <div class="actions">
+          <button class="btn ghost" id="btn-clear">清空</button>
+        </div>
+      </header>
+      <pre class="logs" id="logs"></pre>
+    </section>
+  </main>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+# 依赖与构建产物
+node_modules/
+dist/
+build/
+out/
+
+# 配置与密钥（绝不提交）
+config.json
+src/sidecar/config.json
+*.key
+*.pem
+.env
+
+# 数据与日志
+*.db
+*.db-shm
+*.db-wal
+*.log
+archive.db
+
+# 系统
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+
+# 临时
+*.tmp
+*.temp
+~$*
+__pycache__/
+*.pyc

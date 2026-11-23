@@ -1,0 +1,25 @@
+{
+  "port": 8787,
+  "persona_id": "dafeiyu",
+  "persona_db": "C:\\Users\\<你的用户名>\\.astrbot\\data\\data_v4.db",
+  "astrbot_config": "C:\\Users\\<你的用户名>\\.astrbot\\data\\cmd_config.json",
+  "upstream_source": "deepseek",
+  "upstream_base": "https://api.deepseek.com/v1",
+  "upstream_model": "deepseek-chat",
+  "lm_base": "http://127.0.0.1:7801/page/external",
+  "lm_key": "",
+  "scope": "airi:desktop",
+  "write_scope": "",
+  "recall_k": 5,
+  "extract": {
+    "enabled": true,
+    "model": "deepseek-chat",
+    "min_chars": 6,
+    "min_importance": 0.3,
+    "max_per_turn": 2
+  },
+  "archive": {
+    "enabled": true,
+    "db_path": "archive.db"
+  }
+}

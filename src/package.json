@@ -1,0 +1,55 @@
+{
+  "name": "dafeiyu-hub",
+  "version": "0.1.0",
+  "description": "大肥鱼中转站 —— 让 QQ 与桌宠共享人格与记忆",
+  "main": "electron/main.js",
+  "author": "",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "local.dafeiyu.hub",
+    "productName": "大肥鱼中转站",
+    "directories": {
+      "output": "../dist"
+    },
+    "files": [
+      "electron/**",
+      "renderer/**",
+      "assets/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../sidecar",
+        "to": "sidecar",
+        "filter": [
+          "**/*",
+          "!hub.log",
+          "!__pycache__/**"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "portable",
+        "nsis"
+      ]
+    },
+    "portable": {
+      "artifactName": "大肥鱼中转站-${version}-portable.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "大肥鱼中转站-${version}-setup.exe"
+    }
+  }
+}
