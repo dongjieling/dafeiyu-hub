@@ -19,7 +19,8 @@
   },
   "archive": {
     "enabled": true,
-    "db_path": "archive.db"
+    "db_path": "archive.db",
+    "retention_days": 0
   },
   "write_scope": "",
   "knowledge": {
@@ -30,5 +31,9 @@
     "kb_names": [],
     "top_k": 3,
     "timeout": 8
+  },
+  "logging": {
+    "log_content": false,
+    "preview_chars": 20
   }
 }

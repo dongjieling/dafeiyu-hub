@@ -58,6 +58,12 @@ def probe_lm(cfg: dict, force: bool = False) -> dict:
         return {'connected': False, 'reason': reason}
 
 
+# ---------------- 日志开关 ----------------
+def _log_content(cfg: dict) -> bool:
+    """是否允许把对话内容写进日志（默认关闭，防泄露）"""
+    return bool(((cfg.get('logging') or {}).get('log_content')) is True)
+
+
 # ---------------- 召回 ----------------
 def recall(cfg: dict, query: str) -> list[str]:
     key = cfg.get('lm_key') or ''
@@ -92,9 +98,13 @@ def recall(cfg: dict, query: str) -> list[str]:
             if text:
                 out.append(str(text))
     out = out[:12]
-    log(f'召回查询: [{query[:50]}] -> {len(out)} 条')
-    if out:
-        log('召回详情: ' + ' | '.join(x[:24].replace('\n', ' ') for x in out))
+    if _log_content(cfg):
+        preview = int(((cfg.get('logging') or {}).get('preview_chars')) or 20)
+        log(f'召回查询: [{query[:50]}] -> {len(out)} 条')
+        if out:
+            log('召回详情: ' + ' | '.join(x[:preview].replace('\n', ' ') for x in out))
+    else:
+        log(f'召回: {len(out)} 条（内容不记录）')
     return out
 
 
@@ -223,6 +233,7 @@ def init_archive(cfg: dict) -> None:
         con.commit()
         con.close()
         log(f'归档库就绪: {db.name}')
+        _cleanup_archive(cfg, db)
     except Exception as e:
         log(f'归档库初始化失败: {e}')
 
@@ -305,3 +316,22 @@ def schedule_memory_job(cfg: dict, user_text: str, reply_text: str) -> None:
             log(f'记忆任务异常: {e}')
 
     threading.Thread(target=worker, daemon=True).start()
+
+
+def _cleanup_archive(cfg: dict, db) -> None:
+    """按保留天数删除旧原文（0 表示永久保留）"""
+    days = int(((cfg.get('archive') or {}).get('retention_days')) or 0)
+    if days <= 0:
+        return
+    cutoff = time.time() - days * 86400
+    try:
+        with _lock:
+            con = sqlite3.connect(db, timeout=10)
+            removed = con.execute('DELETE FROM messages WHERE created_at < ?', (cutoff,)).rowcount
+            con.execute('DELETE FROM sessions WHERE last_active < ?', (cutoff,))
+            con.commit()
+            con.close()
+        if removed:
+            log(f'归档清理: 删除 {removed} 条超过 {days} 天的原文')
+    except Exception as e:
+        log(f'归档清理失败: {e}')

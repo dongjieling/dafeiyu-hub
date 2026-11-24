@@ -52,7 +52,11 @@ def retrieve(cfg: dict, query: str) -> list[str]:
 
     _cache.update({'key': query, 'items': out, 'ts': now})
     if out:
-        log(f'知识库命中 {len(out)} 条: ' + ' | '.join(x[:32].replace('\n', ' ') for x in out))
+        allow = bool(((cfg.get('logging') or {}).get('log_content')) is True)
+        if allow:
+            log(f'知识库命中 {len(out)} 条: ' + ' | '.join(x[:32].replace('\n', ' ') for x in out))
+        else:
+            log(f'知识库命中 {len(out)} 条（内容不记录）')
     return out
 
 

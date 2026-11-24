@@ -11,7 +11,7 @@ import os
 import shutil
 from pathlib import Path
 
-SIDECAR_VERSION = '0.3'
+SIDECAR_VERSION = os.environ.get('HUB_VERSION') or '0.3'
 
 BASE_DIR = Path(__file__).parent
 BUNDLED_CONFIG = BASE_DIR / 'config.json'
@@ -66,7 +66,8 @@ DEFAULTS = {
         'max_per_turn': 2,
         'timeout': 45,
     },
-    'archive': {'enabled': True, 'db_path': 'archive.db'},
+    'archive': {'enabled': True, 'db_path': 'archive.db', 'retention_days': 0},
+    'logging': {'log_content': False, 'preview_chars': 20},
     'knowledge': {
         'enabled': False,
         'base_url': 'http://127.0.0.1:6185/api/v1',

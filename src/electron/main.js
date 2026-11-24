@@ -242,6 +242,7 @@ function startSidecar() {
       PYTHONIOENCODING: 'utf-8',
       HUB_PORT: String(config.hubPort),
       HUB_DATA_DIR: dataDir,
+      HUB_VERSION: app.getVersion(),
       ELECTRON_RUN_AS_NODE: '', // 确保不被当作 node 运行
     },
   });
