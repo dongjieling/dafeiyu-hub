@@ -1,33 +1,12 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
-const os = require('node:os');
 const { spawn } = require('node:child_process');
 const http = require('node:http');
 
-// ---------- 自动寻找 Python ----------
-function findPython() {
-  const candidates = [
-    process.env.HUB_PYTHON,
-    path.join(os.homedir(), 'AppData', 'Local', 'AstrBot', 'backend', 'python', 'python.exe'),
-    path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'Python', 'Python313', 'python.exe'),
-    'C:\\Python313\\python.exe',
-    'C:\\Python312\\python.exe',
-    'C:\\Python311\\python.exe',
-  ].filter(Boolean);
-  for (const p of candidates) {
-    try {
-      if (fs.existsSync(p)) return p;
-    } catch {
-      /* 忽略 */
-    }
-  }
-  return 'python';
-}
-
 // ---------- 配置 ----------
 const DEFAULT_CONFIG = {
-  pythonPath: findPython(),
+  pythonPath: 'C:\\Users\\41328\\AppData\\Local\\AstrBot\\backend\\python\\python.exe',
   hubPort: 8787,
   autoStartSidecar: true,
 };
@@ -36,6 +15,10 @@ let mainWindow = null;
 let tray = null;
 let sidecar = null;
 let isQuitting = false;
+let stopping = false;
+let restartCount = 0;
+let restartTimer = null;
+const MAX_RESTARTS = 5;
 
 function configPath() {
   return path.join(app.getPath('userData'), 'config.json');
@@ -274,7 +257,25 @@ function startSidecar() {
     sidecar = null;
     updateTrayMenu();
     notifyState();
+
+    // 用户主动停止或正在退出时不重启
+    if (stopping || isQuitting) return;
+
+    if (restartCount >= MAX_RESTARTS) {
+      log(`已连续重启 ${restartCount} 次仍失败，不再自动重启（请查看日志）`);
+      return;
+    }
+    restartCount += 1;
+    const delay = 3000;
+    log(`${delay / 1000} 秒后自动重启（第 ${restartCount}/${MAX_RESTARTS} 次）`);
+    clearTimeout(restartTimer);
+    restartTimer = setTimeout(() => startSidecar(), delay);
   });
+
+  // 稳定运行 60 秒后重置计数
+  setTimeout(() => {
+    if (isSidecarRunning()) restartCount = 0;
+  }, 60000);
 
   updateTrayMenu();
   notifyState();
@@ -287,12 +288,18 @@ function stopSidecar() {
     return false;
   }
   log('正在停止服务…');
+  stopping = true;
+  clearTimeout(restartTimer);
   try {
     sidecar.kill();
   } catch (err) {
     log(`停止失败: ${err.message}`);
   }
   sidecar = null;
+  setTimeout(() => {
+    stopping = false;
+    restartCount = 0;
+  }, 1500);
   updateTrayMenu();
   notifyState();
   return true;
