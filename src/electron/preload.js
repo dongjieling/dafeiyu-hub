@@ -14,6 +14,10 @@ contextBridge.exposeInMainWorld('hub', {
   revealLogs: () => ipcRenderer.invoke('hub:revealLogs'),
   configPath: () => ipcRenderer.invoke('hub:configPath'),
 
+  // 记忆原子补丁
+  patchStatus: () => ipcRenderer.invoke('patch:status'),
+  patchApply: () => ipcRenderer.invoke('patch:apply'),
+
   // 参数调整
   params: {
     plugins: () => ipcRenderer.invoke('params:plugins'),

@@ -113,6 +113,35 @@ function render() {
   $('#btn-stop').disabled = !running;
 }
 
+// ---------- 记忆原子补丁 ----------
+async function refreshPatch() {
+  try {
+    const st = await window.hub.patchStatus();
+    const box = document.getElementById('patch-warn');
+    if (!box) return;
+    if (st.state === 'patched' || st.state === 'missing') {
+      box.hidden = true;
+    } else {
+      box.hidden = false;
+      const txt = document.getElementById('patch-warn-text');
+      if (txt) txt.textContent = st.hint || '补丁缺失，桌宠写的记忆不会生成原子。';
+    }
+  } catch {
+    /* 忽略 */
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('btn-patch-fix');
+  if (btn) {
+    btn.addEventListener('click', async () => {
+      const res = await window.hub.patchApply();
+      appendLog(res.ok ? '记忆原子补丁已修复' : '修复失败: ' + (res.hint || res.state));
+      await refreshPatch();
+    });
+  }
+});
+
 // ---------- 健康检查 ----------
 async function refresh() {
   const status = await window.hub.status();
@@ -197,6 +226,7 @@ $('#btn-save').addEventListener('click', async () => {
   }
   await loadConfig();
   await refresh();
+  await refreshPatch();
   // 窗口隐藏时降频，避免无意义轮询
   setInterval(() => {
     if (!document.hidden) refresh();

@@ -51,7 +51,7 @@
 
 | 文件 | 大小 | 链接 |
 |---|---|---|
-| `dafeiyu-hub-0.3.1-portable.exe` | 105.2 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v0.3.1/dafeiyu-hub-0.3.1-portable.exe) |
+| `dafeiyu-hub-0.3.2-portable.exe` | 105.2 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v0.3.2/dafeiyu-hub-0.3.2-portable.exe) |
 
 或在 [Releases 页面](https://github.com/dongjieling/dafeiyu-hub/releases) 选择版本下载。
 
@@ -97,7 +97,7 @@ curl http://127.0.0.1:8787/health
 
 ## 版本
 
-当前版本 **v0.3.1**：修复三个硬性问题（QQ 归档同步、记忆原子、写回重试）。
+当前版本 **v0.3.2**：记忆原子补丁启动自检与一键修复。
 
 ## 文档
 

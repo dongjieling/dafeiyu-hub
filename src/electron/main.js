@@ -349,6 +349,7 @@ ipcMain.handle('hub:appInfo', () => ({
 
 // ---------- 参数调整 ----------
 const plug = require('./plugins');
+const atomPatch = require('./atomPatch');
 
 ipcMain.handle('params:plugins', () => plug.listPlugins());
 ipcMain.handle('params:pluginGet', (_e, key) => plug.getPluginConfig(key));
@@ -411,6 +412,14 @@ ipcMain.handle('hub:setConfig', (_e, patch) => {
 ipcMain.handle('hub:revealLogs', () => shell.openPath(app.getPath('userData')));
 ipcMain.handle('hub:configPath', () => hubConfigPath());
 
+// 记忆原子补丁状态
+ipcMain.handle('patch:status', () => atomPatch.patchStatus());
+ipcMain.handle('patch:apply', () => {
+  const res = atomPatch.applyPatch();
+  log(res.ok ? '记忆原子补丁已重新打上' : '补丁失败: ' + (res.hint || res.state));
+  return res;
+});
+
 
 // ---------- 生命周期 ----------
 const gotLock = app.requestSingleInstanceLock();
@@ -423,6 +432,9 @@ if (!gotLock) {
     config = loadConfig();
     createWindow();
     createTray();
+    const ps = atomPatch.patchStatus();
+    if (ps.state === 'patched') log('记忆原子补丁: 正常');
+    else log('记忆原子补丁: ' + (ps.hint || ps.state));
     if (config.autoStartSidecar) {
       startSidecar();
     }
