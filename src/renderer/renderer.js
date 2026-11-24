@@ -63,6 +63,8 @@ function render() {
     : '—';
   $('#val-model').textContent = health?.ok ? health.data.upstream_model || '—' : '—';
   $('#val-python').textContent = state.cfg?.pythonPath || '—';
+  const verEl = $('#val-version');
+  if (verEl) verEl.textContent = health?.ok ? 'v' + (health.data.version || '—') : '—';
 
   // 按钮
   $('#btn-start').disabled = running;
@@ -136,6 +138,13 @@ $('#btn-save').addEventListener('click', async () => {
 
 // ---------- 初始化 ----------
 (async () => {
+  try {
+    const info = await window.hub.appInfo();
+    const el = document.getElementById('version');
+    if (el) el.textContent = 'v' + info.version;
+  } catch {
+    /* 忽略 */
+  }
   await loadConfig();
   await refresh();
   // 窗口隐藏时降频，避免无意义轮询

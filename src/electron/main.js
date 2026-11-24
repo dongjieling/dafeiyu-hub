@@ -340,6 +340,11 @@ function checkHealth(timeoutMs = 2500) {
 // ---------- IPC ----------
 ipcMain.handle('hub:start', () => startSidecar());
 ipcMain.handle('hub:stop', () => stopSidecar());
+ipcMain.handle('hub:appInfo', () => ({
+  version: app.getVersion(),
+  electron: process.versions.electron,
+  node: process.versions.node,
+}));
 ipcMain.handle('hub:status', () => ({
   running: isSidecarRunning(),
   port: config.hubPort,

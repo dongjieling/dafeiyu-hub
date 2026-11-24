@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('hub', {
   start: () => ipcRenderer.invoke('hub:start'),
   stop: () => ipcRenderer.invoke('hub:stop'),
   status: () => ipcRenderer.invoke('hub:status'),
+  appInfo: () => ipcRenderer.invoke('hub:appInfo'),
   health: () => ipcRenderer.invoke('hub:health'),
 
   // 配置
