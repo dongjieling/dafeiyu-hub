@@ -6,6 +6,39 @@ const state = {
   cfg: null,
 };
 
+// ---------- 主题 ----------
+const THEME_KEY = 'hub-theme';
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const label = document.getElementById('theme-label');
+  if (label) label.textContent = theme === 'light' ? '浅色' : '深色';
+  try {
+    localStorage.setItem(THEME_KEY, theme);
+  } catch {
+    /* 忽略 */
+  }
+}
+
+function initTheme() {
+  let theme = 'dark';
+  try {
+    theme = localStorage.getItem(THEME_KEY) || 'dark';
+  } catch {
+    /* 忽略 */
+  }
+  applyTheme(theme);
+  const btn = document.getElementById('btn-theme');
+  if (btn) {
+    btn.addEventListener('click', () => {
+      const now = document.documentElement.getAttribute('data-theme');
+      applyTheme(now === 'light' ? 'dark' : 'light');
+    });
+  }
+}
+
+initTheme();
+
 // ---------- 页面切换 ----------
 document.querySelectorAll('.nav-item:not(.disabled)').forEach((btn) => {
   btn.addEventListener('click', () => {
@@ -14,6 +47,10 @@ document.querySelectorAll('.nav-item:not(.disabled)').forEach((btn) => {
     const page = btn.dataset.page;
     document.querySelectorAll('.page').forEach((p) => p.classList.remove('active'));
     $(`#page-${page}`).classList.add('active');
+    if (page === 'params' && typeof loadParams === 'function' && !window.__paramsLoaded) {
+      window.__paramsLoaded = true;
+      loadParams();
+    }
   });
 });
 
@@ -65,6 +102,11 @@ function render() {
   $('#val-python').textContent = state.cfg?.pythonPath || '—';
   const verEl = $('#val-version');
   if (verEl) verEl.textContent = health?.ok ? 'v' + (health.data.version || '—') : '—';
+
+  const aboutVer = document.getElementById('about-version');
+  if (aboutVer) aboutVer.textContent = 'v' + (state.appVersion || '—');
+  const aboutSide = document.getElementById('about-sidecar');
+  if (aboutSide) aboutSide.textContent = health?.ok ? 'v' + (health.data.version || '—') : '未连接';
 
   // 按钮
   $('#btn-start').disabled = running;
@@ -118,6 +160,13 @@ $('#btn-open-logs').addEventListener('click', () => window.hub.revealLogs());
 
 // ---------- 配置 ----------
 async function loadConfig() {
+  try {
+    const p = await window.hub.configPath();
+    const el = document.getElementById('cfg-path');
+    if (el) el.textContent = p;
+  } catch {
+    /* 忽略 */
+  }
   const cfg = await window.hub.getConfig();
   state.cfg = cfg;
   $('#cfg-port').value = cfg.hubPort;
@@ -140,6 +189,7 @@ $('#btn-save').addEventListener('click', async () => {
 (async () => {
   try {
     const info = await window.hub.appInfo();
+    state.appVersion = info.version;
     const el = document.getElementById('version');
     if (el) el.textContent = 'v' + info.version;
   } catch {

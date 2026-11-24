@@ -20,7 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import memory
 import persona
 import prompt
-from config import CFG, LOG_PATH
+from config import CFG, CONFIG_PATH, LOG_PATH, SIDECAR_VERSION
 from upstream import read_upstream
 from util import init_log, log, safe_json
 
@@ -29,7 +29,7 @@ init_log(LOG_PATH)
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
-    server_version = 'DafeiyuHub/0.2'
+    server_version = 'DafeiyuHub/' + '0.3'
 
     def log_message(self, fmt, *args):
         # 健康检查与模型列表每几秒一次，不写日志，避免淹没真实事件
@@ -54,7 +54,7 @@ class Handler(BaseHTTPRequestHandler):
             kb = CFG.get('knowledge') or {}
             self._json(200, {
                 'status': 'ok',
-                'version': '0.2',
+                'version': SIDECAR_VERSION,
                 'persona_id': CFG.get('persona_id'),
                 'persona_chars': len(text),
                 'upstream_model': up['model'],
@@ -65,6 +65,7 @@ class Handler(BaseHTTPRequestHandler):
                 'knowledge_enabled': bool(kb.get('enabled')),
                 'knowledge_kbs': len(kb.get('kb_names') or []),
                 'port': CFG.get('port'),
+                'config_file': str(CONFIG_PATH),
             })
             return
 
@@ -190,7 +191,7 @@ def main() -> None:
     up = read_upstream(CFG)
     kb = CFG.get('knowledge') or {}
     log(
-        f"===== 启动 v0.2 端口 {port} 人格 {len(text)} 字 上游 {up['model']} "
+        f"===== 启动 v0.3 端口 {port} 人格 {len(text)} 字 上游 {up['model']} "
         f"key={bool(up['key'])} 知识库={'开' if kb.get('enabled') else '关'}({len(kb.get('kb_names') or [])}库) ====="
     )
     print(f'[ready] http://127.0.0.1:{port}/v1', flush=True)

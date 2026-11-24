@@ -32,6 +32,8 @@
 - **记忆召回**：每次对话前自动检索相关记忆并注入提示词
 - **记忆写回**：对话结束后异步提炼要点，写回记忆库
 - **原文归档**：所有对话存本地 SQLite，可回溯、可重建
+- **参数调整**：直接在应用内改 AstrBot 插件参数（自动检测插件与版本）
+- **深色 / 浅色主题**：一键切换
 - **本地优先**：只监听 `127.0.0.1`，密钥不出本机
 
 ## 快速开始
@@ -49,14 +51,14 @@
 
 | 文件 | 大小 | 链接 |
 |---|---|---|
-| `dafeiyu-hub-0.2.0-portable.exe` | 105.2 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v0.2.0/dafeiyu-hub-0.2.0-portable.exe) |
+| `dafeiyu-hub-0.3.0-portable.exe` | 105.2 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v0.3.0/dafeiyu-hub-0.3.0-portable.exe) |
 
 或在 [Releases 页面](https://github.com/dongjieling/dafeiyu-hub/releases) 选择版本下载。
 
 **放到普通目录**（如 `D:\大肥鱼中转站\`），不要放受限目录，双击运行。
 
 > ⚠️ 未签名 EXE，SmartScreen 可能提示「未知发布者」，选「更多信息 → 仍要运行」。
-> SHA256：`bca344d0d6609d64ea54a6ef1a4078dd66808c059be43b03baa84c1bd263055a`
+> SHA256：`0a93cf43a38b7907bb5ba83d65e2b27d5a64080ec1892638ca86c5d307450ed2`
 
 > ⚠️ 首次运行会提示配置 Python 路径与记忆库地址。
 
@@ -95,14 +97,14 @@ curl http://127.0.0.1:8787/health
 
 ## 版本
 
-当前版本 **v0.2.0**：模块化重构、进程守护、单元测试。
+当前版本 **v0.3.0**：参数调整页、深/浅主题、关于页、品牌重设计。
 
 ## 文档
 
 | 文档 | 内容 |
 |---|---|
 | [快速上手](docs/快速上手.md) | **装机后第一份该读的**：每天开机顺序、三个灯、怎么让她记住 |
-| [使用说明](docs/使用说明.md) | 界面、配置项、日常操作 |
+| [使用说明](docs/使用说明.md) | 界面、参数页、配置项、日常操作 |
 | [安装中转站](docs/安装-中转站.md) | 从零部署本软件 |
 | [安装 QQ 机器人](docs/安装-QQ机器人.md) | NapCat + AstrBot |
 | [安装桌面宠物](docs/安装-桌宠.md) | AIRI + Live2D 模型 |

@@ -345,6 +345,54 @@ ipcMain.handle('hub:appInfo', () => ({
   electron: process.versions.electron,
   node: process.versions.node,
 }));
+
+// ---------- 参数调整 ----------
+const plug = require('./plugins');
+
+ipcMain.handle('params:plugins', () => plug.listPlugins());
+ipcMain.handle('params:pluginGet', (_e, key) => plug.getPluginConfig(key));
+ipcMain.handle('params:pluginSave', (_e, key, patch) => {
+  const res = plug.savePluginConfig(key, patch);
+  log(res.ok ? `插件参数已保存: ${key}（备份 ${res.backup || '无'}）` : `插件参数保存失败: ${key} ${res.error}`);
+  return res;
+});
+ipcMain.handle('params:pluginReload', async (_e, key) => {
+  const res = await plug.reloadPlugin(key);
+  log(res.ok ? `插件已重载: ${key}` : `插件重载失败: ${key} ${res.error || res.status}`);
+  return res;
+});
+
+// 中转站自身参数（读写 sidecar/config.json）
+function hubConfigPath() {
+  // 用户配置始终在数据目录（sidecar 也读这里），包内那份只作模板
+  return path.join(app.getPath('userData'), 'config.json');
+}
+
+ipcMain.handle('params:hubGet', () => {
+  const cfg = plug.readJson(hubConfigPath());
+  if (!cfg) return { ok: false, error: '读取 sidecar 配置失败' };
+  const values = {};
+  for (const f of plug.HUB_SPECS) values[f.path] = plug.getByPath(cfg, f.path);
+  return { ok: true, fields: plug.HUB_SPECS, values };
+});
+
+ipcMain.handle('params:hubSave', (_e, patch) => {
+  const file = hubConfigPath();
+  const cfg = plug.readJson(file);
+  if (!cfg) return { ok: false, error: '读取 sidecar 配置失败' };
+  for (const [dotPath, value] of Object.entries(patch || {})) {
+    if (!plug.HUB_SPECS.some((f) => f.path === dotPath)) continue;
+    plug.setByPath(cfg, dotPath, value);
+  }
+  const bak = plug.backupFile(file);
+  try {
+    fs.writeFileSync(file, JSON.stringify(cfg, null, 2), 'utf8');
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+  log(`中转站参数已保存（备份 ${bak || '无'}），需重启服务生效`);
+  return { ok: true, backup: bak, needsRestart: true };
+});
 ipcMain.handle('hub:status', () => ({
   running: isSidecarRunning(),
   port: config.hubPort,
@@ -360,6 +408,8 @@ ipcMain.handle('hub:setConfig', (_e, patch) => {
   return config;
 });
 ipcMain.handle('hub:revealLogs', () => shell.openPath(app.getPath('userData')));
+ipcMain.handle('hub:configPath', () => hubConfigPath());
+
 
 // ---------- 生命周期 ----------
 const gotLock = app.requestSingleInstanceLock();

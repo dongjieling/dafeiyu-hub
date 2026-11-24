@@ -9,21 +9,22 @@
 <body>
   <aside class="sidebar">
     <div class="brand">
-      <div class="brand-mark">大</div>
-      <div class="brand-text">
-        <strong>大肥鱼中转站</strong>
-        <span>memory hub</span>
-      </div>
+      <span class="brand-name">大肥鱼中转站</span>
     </div>
 
     <nav class="nav">
       <button class="nav-item active" data-page="status">状态</button>
+      <button class="nav-item" data-page="params">参数</button>
       <button class="nav-item" data-page="config">配置</button>
       <button class="nav-item" data-page="logs">日志</button>
-      <button class="nav-item disabled" data-page="memory" disabled>记忆<span class="badge">v1.1</span></button>
+      <button class="nav-item disabled" data-page="memory" disabled>记忆<span class="badge">v0.4</span></button>
+      <button class="nav-item" data-page="about">关于</button>
     </nav>
 
     <div class="sidebar-foot">
+      <button class="theme-toggle" id="btn-theme" type="button" title="切换深色 / 浅色">
+        <span id="theme-label">深色</span>
+      </button>
       <span id="version">v—</span>
     </div>
   </aside>
@@ -93,6 +94,26 @@
       </div>
     </section>
 
+
+    <!-- 参数页 -->
+    <section class="page" id="page-params">
+      <header class="page-head">
+        <h1>参数</h1>
+        <div class="actions">
+          <button class="btn ghost" id="btn-params-reload">重新检测</button>
+        </div>
+      </header>
+
+      <div id="hub-params" class="param-group"></div>
+      <div id="plugin-params"></div>
+
+      <div class="hint" style="margin-top:18px">
+        <strong>说明：</strong>
+        插件的参数改动保存在 AstrBot 的配置文件中，保存后需要重载插件才生效；
+        中转站自身的参数改动需要重启服务。
+      </div>
+    </section>
+
     <!-- 配置页 -->
     <section class="page" id="page-config">
       <header class="page-head">
@@ -122,8 +143,9 @@
         </label>
       </div>
 
-      <div class="hint">
-        配置保存在 <code>%APPDATA%\dafeiyu-hub\config.json</code>。记忆库、提炼、归档等选项在后续版本加入。
+            <div class="hint">
+        <strong>配置文件：</strong><code id="cfg-path">—</code><br />
+        记忆、提炼、知识库等参数在「参数」页调整；这里只放启动相关的设置。
       </div>
     </section>
 
@@ -137,8 +159,77 @@
       </header>
       <pre class="logs" id="logs"></pre>
     </section>
+
+    <!-- 关于页 -->
+    <section class="page" id="page-about">
+      <header class="page-head">
+        <h1>关于</h1>
+      </header>
+
+      <div class="about-block">
+        <h2>这是什么</h2>
+        <p>一个本地运行的中转服务，让 <strong>QQ 机器人</strong> 和 <strong>桌面宠物</strong> 共享同一套人格与记忆。</p>
+        <p>它在两者和模型之间做三件事：注入人格、检索记忆、把新对话存回记忆库。</p>
+      </div>
+
+      <div class="about-block">
+        <h2>解决什么问题</h2>
+        <table class="about-table">
+          <tr><th>没有它</th><th>有它</th></tr>
+          <tr><td>QQ 里记得你，桌面上不记得</td><td>两边共享同一份记忆</td></tr>
+          <tr><td>桌宠退出就清空历史</td><td>说过的话被提炼成长期记忆</td></tr>
+          <tr><td>人格散落在各处</td><td>人格只有一份，实时同步</td></tr>
+          <tr><td>换模型要改多处配置</td><td>只改中转站一处</td></tr>
+        </table>
+      </div>
+
+      <div class="about-block">
+        <h2>工作原理</h2>
+        <pre class="about-flow">你说话
+  ↓
+中转站 ──→ 检索记忆库（相关记忆）
+       ──→ 检索知识库（可选）
+  ↓
+人格 + 记忆 + 你的话 → 模型
+  ↓
+回复（流式回传）
+  ↓
+后台：原文归档 → 提炼要点 → 写回记忆库</pre>
+      </div>
+
+      <div class="about-block">
+        <h2>当前版本</h2>
+        <p><span class="about-ver" id="about-version">v—</span> · 服务端 <span id="about-sidecar">—</span></p>
+        <ul class="about-list">
+          <li>人格注入、记忆召回、记忆写回、原文归档</li>
+          <li>知识库检索（可选）</li>
+          <li>进程守护：服务崩溃自动重启</li>
+          <li>深色 / 浅色主题</li>
+        </ul>
+      </div>
+
+      <div class="about-block">
+        <h2>接下来</h2>
+        <ul class="about-list">
+          <li><strong>v0.3</strong> 插件参数调整、界面重做</li>
+          <li><strong>v0.4</strong> 记忆浏览与编辑、记忆互通适配层</li>
+          <li><strong>v1.0</strong> 多协议端支持（NapCat / Lagrange / LLOneBot）</li>
+        </ul>
+      </div>
+
+      <div class="about-block">
+        <h2>依赖与致谢</h2>
+        <ul class="about-list">
+          <li>AstrBot — 机器人框架（AGPL-3.0）</li>
+          <li>LivingMemory — 记忆引擎（AGPL-3.0）</li>
+          <li>AIRI — 桌面宠物（MIT）</li>
+          <li>本项目仅通过公开接口调用上述组件，未包含其代码</li>
+        </ul>
+      </div>
+    </section>
   </main>
 
   <script src="renderer.js"></script>
+  <script src="params.js"></script>
 </body>
 </html>

@@ -1,19 +1,22 @@
 """配置：唯一来源。
 
-优先级：环境变量 > config.json > 默认值
-只暴露一个 CFG 对象，其他模块不要自己读文件。
+优先级：环境变量 > 用户数据目录 config.json > 包内模板 config.json > 默认值
+用户改的永远是数据目录那份，安装包里的只作模板。
 """
 
 from __future__ import annotations
 
 import json
 import os
+import shutil
 from pathlib import Path
 
-BASE_DIR = Path(__file__).parent
-CONFIG_PATH = BASE_DIR / 'config.json'
+SIDECAR_VERSION = '0.3'
 
-# 数据目录（打包后 sidecar 目录可能只读，由宿主通过 HUB_DATA_DIR 指定可写目录）
+BASE_DIR = Path(__file__).parent
+BUNDLED_CONFIG = BASE_DIR / 'config.json'
+
+# 数据目录（打包后 sidecar 目录只读，由宿主通过 HUB_DATA_DIR 指定可写目录）
 _default_data = BASE_DIR
 try:
     _env_data = os.environ.get('HUB_DATA_DIR')
@@ -22,7 +25,22 @@ try:
 except Exception:
     DATA_DIR = _default_data
 
+CONFIG_PATH = DATA_DIR / 'config.json'
 LOG_PATH = DATA_DIR / 'hub.log'
+
+
+def _ensure_user_config() -> None:
+    """首次运行时，把包内模板复制到数据目录，之后只读写数据目录那份。"""
+    try:
+        if CONFIG_PATH == BUNDLED_CONFIG:
+            return
+        if not CONFIG_PATH.exists() and BUNDLED_CONFIG.exists():
+            shutil.copy2(BUNDLED_CONFIG, CONFIG_PATH)
+    except Exception:
+        pass
+
+
+_ensure_user_config()
 
 DEFAULTS = {
     'port': 8787,
@@ -76,7 +94,7 @@ def _load_file() -> dict:
     if not CONFIG_PATH.exists():
         return {}
     try:
-        return json.loads(CONFIG_PATH.read_text(encoding='utf-8'))
+        return json.loads(CONFIG_PATH.read_text(encoding='utf-8-sig'))
     except Exception:
         return {}
 
