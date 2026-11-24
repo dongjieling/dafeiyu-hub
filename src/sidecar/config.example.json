@@ -10,7 +10,7 @@
   "lm_key": "",
   "scope": "airi:desktop",
   "write_scope": "",
-  "recall_k": 5,
+  "recall_k": 8,
   "extract": {
     "enabled": true,
     "model": "deepseek-chat",

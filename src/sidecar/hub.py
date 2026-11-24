@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import re
 import os
 import sqlite3
 import ssl
@@ -298,7 +299,11 @@ def recall_memories(query: str, k: int | None = None) -> list[str]:
             text = it.get('content') or it.get('text') or it.get('memory')
             if text:
                 out.append(str(text))
-    return out[:8]
+    out = out[:8]
+    log(f'召回查询: [{query[:60]}] -> {len(out)} 条')
+    if out:
+        log('召回详情: ' + ' | '.join(x[:24].replace('\n', ' ') for x in out))
+    return out
 
 
 def last_user_text(messages: list) -> str:
@@ -313,6 +318,49 @@ def last_user_text(messages: list) -> str:
     return ''
 
 
+_TS_RE = re.compile(r'^\s*\[?\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?\]?\s*')
+_ACT_RE = re.compile(r'<\|[^|]*\|>')  # 桌宠自己的标记：<|ACT {...}|>、<|DELAY 1|> 等
+
+
+def clean_query(text: str) -> str:
+    """去掉桌宠塞进消息里的时间戳、运行时上下文和动作标记，只保留用户真正说的话"""
+    t = text or ''
+    # 截断 [Context] / [System] 之类附加块
+    for marker in ('[Context]', '[context]', '[SYSTEM]', '[System]', '---\n'):
+        idx = t.find(marker)
+        if idx > 0:
+            t = t[:idx]
+    # 去掉 <|ACT ...|> 之类的内联标记
+    t = _ACT_RE.sub('', t)
+    # 去掉开头的时间戳，可能有多层
+    for _ in range(3):
+        new = _TS_RE.sub('', t)
+        if new == t:
+            break
+        t = new
+    return t.strip()
+
+
+def build_recall_query(messages: list) -> str:
+    """优先用最后一条用户消息；太短则拼上最近几条，给检索一点上下文"""
+    cleaned = clean_query(last_user_text(messages))
+    if len(cleaned) >= 4:
+        return cleaned[:300]
+
+    recent = []
+    for m in reversed(messages[-6:]):
+        c = m.get('content')
+        if not isinstance(c, str):
+            continue
+        c = clean_query(c)
+        if len(c) < 2:
+            continue
+        recent.append(c[:80])
+        if sum(len(x) for x in recent) > 120:
+            break
+    return ' '.join(reversed(recent))[:300]
+
+
 # ---------------- 提示词注入 ----------------
 def build_messages(payload: dict) -> list:
     persona = read_persona()
@@ -321,32 +369,38 @@ def build_messages(payload: dict) -> list:
         return messages
 
     # 召回相关记忆（失败不影响主流程）
-    memories = recall_memories(last_user_text(messages))
+    memories = recall_memories(build_recall_query(messages))
     if memories:
         log(f'召回 {len(memories)} 条记忆')
 
     memory_block = ''
     if memories:
         lines = '\n'.join(f'- {m}' for m in memories)
-        memory_block = f'\n\n【你记得关于他的事】\n{lines}\n（自然地用上，别罗列，别复述）'
+        memory_block = (
+            '【你现在想起来了的关于他的事】\n'
+            f'{lines}\n'
+            '这些是你确实知道的。如果其中有能回答上一条问题的内容，就直接说，'
+            '不要因为之前说过"不知道"就继续不知道。'
+            '（记忆可能过时，与他刚说的冲突时以他刚说的为准）'
+        )
 
-    system_text = persona + memory_block
-
-    out, injected = [], False
+    # 人格放最前面
+    out = [{'role': 'system', 'content': persona}]
     for m in messages:
-        if m.get('role') == 'system' and not injected:
-            content = m.get('content')
-            if isinstance(content, str):
-                out.append({'role': 'system', 'content': system_text + '\n\n' + content})
-            else:
-                out.append({'role': 'system', 'content': system_text})
-                out.append(m)
-            injected = True
+        if m.get('role') == 'system':
+            out[0]['content'] = out[0]['content'] + '\n\n' + (m.get('content') or '')
         else:
             out.append(m)
 
-    if not injected:
-        out.insert(0, {'role': 'system', 'content': system_text})
+    # 记忆放在最后一条用户消息之前，靠近提问位置，避免被长历史冲淡
+    if memory_block:
+        insert_at = len(out)
+        for i in range(len(out) - 1, -1, -1):
+            if out[i].get('role') == 'user':
+                insert_at = i
+                break
+        out.insert(insert_at, {'role': 'system', 'content': memory_block})
+
     return out
 
 
