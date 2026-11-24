@@ -51,14 +51,14 @@
 
 | 文件 | 大小 | 链接 |
 |---|---|---|
-| `dafeiyu-hub-0.3.0-portable.exe` | 105.2 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v0.3.0/dafeiyu-hub-0.3.0-portable.exe) |
+| `dafeiyu-hub-0.3.1-portable.exe` | 105.2 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v0.3.1/dafeiyu-hub-0.3.1-portable.exe) |
 
 或在 [Releases 页面](https://github.com/dongjieling/dafeiyu-hub/releases) 选择版本下载。
 
 **放到普通目录**（如 `D:\大肥鱼中转站\`），不要放受限目录，双击运行。
 
 > ⚠️ 未签名 EXE，SmartScreen 可能提示「未知发布者」，选「更多信息 → 仍要运行」。
-> SHA256：`0a93cf43a38b7907bb5ba83d65e2b27d5a64080ec1892638ca86c5d307450ed2`
+> SHA256：`8837c0aa12e4e81daad754fa16d8d3783f48d8b0e33b9904272bb3eae651d6ef`
 
 > ⚠️ 首次运行会提示配置 Python 路径与记忆库地址。
 
@@ -97,7 +97,7 @@ curl http://127.0.0.1:8787/health
 
 ## 版本
 
-当前版本 **v0.3.0**：参数调整页、深/浅主题、关于页、品牌重设计。
+当前版本 **v0.3.1**：修复三个硬性问题（QQ 归档同步、记忆原子、写回重试）。
 
 ## 文档
 

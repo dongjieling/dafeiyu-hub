@@ -20,7 +20,10 @@
   "archive": {
     "enabled": true,
     "db_path": "archive.db",
-    "retention_days": 0
+    "retention_days": 0,
+    "sync_qq": true,
+    "sync_interval_seconds": 300,
+    "qq_source_db": ""
   },
   "write_scope": "",
   "knowledge": {

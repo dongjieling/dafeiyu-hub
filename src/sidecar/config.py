@@ -66,7 +66,14 @@ DEFAULTS = {
         'max_per_turn': 2,
         'timeout': 45,
     },
-    'archive': {'enabled': True, 'db_path': 'archive.db', 'retention_days': 0},
+    'archive': {
+        'enabled': True,
+        'db_path': 'archive.db',
+        'retention_days': 0,
+        'sync_qq': True,
+        'sync_interval_seconds': 300,
+        'qq_source_db': '',
+    },
     'logging': {'log_content': False, 'preview_chars': 20},
     'knowledge': {
         'enabled': False,

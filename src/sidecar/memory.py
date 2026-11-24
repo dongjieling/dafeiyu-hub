@@ -194,7 +194,7 @@ def write_back(cfg: dict, items: list[dict], seed: str) -> int:
             method='POST',
         )
         try:
-            with urllib.request.urlopen(req, timeout=15) as r:
+            with urllib.request.urlopen(req, timeout=45) as r:
                 res = json.loads(r.read().decode('utf-8', 'ignore'))
             mem_id = (res.get('memory') or {}).get('id') if isinstance(res, dict) else None
             written += 1

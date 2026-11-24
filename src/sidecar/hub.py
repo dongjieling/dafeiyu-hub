@@ -20,6 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import memory
 import persona
 import prompt
+import sync
 from config import CFG, CONFIG_PATH, LOG_PATH, SIDECAR_VERSION
 from upstream import read_upstream
 from util import init_log, log, safe_json
@@ -184,6 +185,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     memory.init_archive(CFG)
+    sync.start(CFG)
     port = int(CFG.get('port') or 8787)
     server = ThreadingHTTPServer(('127.0.0.1', port), Handler)
 
