@@ -1,31 +1,27 @@
 {
   "port": 8787,
   "persona_id": "dafeiyu",
-  "persona_db": "C:\\Users\\<用户名>\\.astrbot\\data\\data_v4.db",
-  "astrbot_config": "C:\\Users\\<用户名>\\.astrbot\\data\\cmd_config.json",
-  "persona_cache_seconds": 30,
+  "persona_db": "C:\\\\Users\\\\<USERNAME>\\\\.astrbot\\\\data\\\\data_v4.db",
+  "astrbot_config": "C:\\\\Users\\\\<USERNAME>\\\\.astrbot\\\\data\\\\cmd_config.json",
   "upstream_source": "deepseek",
   "upstream_base": "https://api.deepseek.com/v1",
   "upstream_model": "deepseek-chat",
-  "upstream_timeout": 180,
   "lm_base": "http://127.0.0.1:7801/page/external",
   "lm_key": "",
-  "lm_timeout": 6,
-  "recall_k": 8,
   "scope": "airi:desktop",
-  "write_scope": "",
+  "recall_k": 8,
   "extract": {
     "enabled": true,
     "model": "deepseek-chat",
     "min_chars": 6,
     "min_importance": 0.3,
-    "max_per_turn": 2,
-    "timeout": 45
+    "max_per_turn": 2
   },
   "archive": {
     "enabled": true,
     "db_path": "archive.db"
   },
+  "write_scope": "",
   "knowledge": {
     "enabled": false,
     "base_url": "http://127.0.0.1:6185/api/v1",
@@ -33,7 +29,6 @@
     "jwt_secret": "",
     "kb_names": [],
     "top_k": 3,
-    "timeout": 8,
-    "cache_seconds": 60
+    "timeout": 8
   }
 }

@@ -47,7 +47,16 @@
 
 ### 2. 下载
 
-从 Releases 下载 `大肥鱼中转站-0.2.0-portable.exe`，**放到普通目录**（不要放 DSH 之类受限目录），双击运行。
+| 文件 | 大小 | 链接 |
+|---|---|---|
+| `dafeiyu-hub-0.2.0-portable.exe` | 105.2 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v0.2.0/dafeiyu-hub-0.2.0-portable.exe) |
+
+或在 [Releases 页面](https://github.com/dongjieling/dafeiyu-hub/releases) 选择版本下载。
+
+**放到普通目录**（如 `D:\大肥鱼中转站\`），不要放受限目录，双击运行。
+
+> ⚠️ 未签名 EXE，SmartScreen 可能提示「未知发布者」，选「更多信息 → 仍要运行」。
+> SHA256：`bca344d0d6609d64ea54a6ef1a4078dd66808c059be43b03baa84c1bd263055a`
 
 > ⚠️ 首次运行会提示配置 Python 路径与记忆库地址。
 
