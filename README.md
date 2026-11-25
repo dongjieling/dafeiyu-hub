@@ -51,7 +51,7 @@
 
 | 文件 | 大小 | 链接 |
 |---|---|---|
-| `dafeiyu-hub-0.4.4-portable.exe` | 105.2 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v0.4.4/dafeiyu-hub-0.4.4-portable.exe) |
+| `dafeiyu-hub-0.4.5-portable.exe` | 105.2 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v0.4.5/dafeiyu-hub-0.4.5-portable.exe) |
 
 或在 [Releases 页面](https://github.com/dongjieling/dafeiyu-hub/releases) 选择版本下载。
 
@@ -97,7 +97,7 @@ curl http://127.0.0.1:8787/health
 
 ## 版本
 
-当前版本 **v0.4.4**：提炼带检索关键词，换个说法也能搜到。
+当前版本 **v0.4.5**：检索词含类别词，泛问也能命中。
 
 ## 文档
 

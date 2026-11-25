@@ -37,13 +37,16 @@ EXTRACT_PROMPT = """从下面这轮对话里提取值得长期记住的信息（
 - 有时间点就写时间（今天/昨天/日期）
 - 附重要性分数 0-1，越稳定越重要
 
-每条还要给 2-3 个检索关键词（topics）：
-- 用口语里可能出现的说法，便于换个问法也能搜到
-- 例："他今晚要去准备辩论赛" → ["晚上安排", "辩论赛", "今晚"]
+每条还要给 3-5 个检索关键词（topics），**必须包含一个宽泛类别词**：
+- 类别词从这个集合里选：健康 饮食 工作 学习 出行 情绪 关系 金钱 计划 娱乐
+- 其余词用口语里可能出现的说法（具体名词、时间）
+- 例："他今晚要去准备辩论赛" → ["计划", "辩论赛", "今晚", "晚上安排"]
+- 例："他下周三要去医院做胃镜" → ["健康", "医院", "胃镜", "下周三", "身体"]
+- 这样问"我最近身体怎么样"也能命中
 - 不要用整句话，不要标点
 
 只输出 JSON 数组，没有就输出 []
-格式：[{{"content": "...", "importance": 0.7, "topics": ["关键词1", "关键词2"]}}]"""
+格式：[{{"content": "...", "importance": 0.7, "topics": ["类别", "关键词2", "关键词3"]}}]"""
 
 
 # ---------------- 健康探测 ----------------
@@ -198,7 +201,7 @@ def extract(cfg: dict, user_text: str, reply_text: str) -> list[dict]:
         topics = it.get('topics')
         if not isinstance(topics, list):
             topics = []
-        topics = [str(x).strip()[:12] for x in topics if str(x).strip()][:3]
+        topics = [str(x).strip()[:12] for x in topics if str(x).strip()][:5]
         out.append(
             {
                 'content': content[:120],
