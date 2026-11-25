@@ -49,6 +49,19 @@
         </div>
       </div>
 
+      <div class="selftest-box">
+        <div class="selftest-head">
+          <strong>连通性自检</strong>
+          <span>写入一条测试记忆，验证「配置 → 记忆库 → 写入 → 检索 → 知识库」是否全通</span>
+        </div>
+        <div class="selftest-actions">
+          <button class="btn primary" id="btn-selftest" type="button">开始自检</button>
+          <button class="btn" id="btn-cleanup-test" type="button">清理测试数据</button>
+          <span id="selftest-status" class="field-hint"></span>
+        </div>
+        <ul class="selftest-steps" id="selftest-steps"></ul>
+      </div>
+
       <div class="patch-warn" id="patch-warn" hidden>
         <strong>记忆原子补丁缺失</strong>
         <span id="patch-warn-text">插件升级后补丁会丢失，桌宠写的记忆不会生成原子，QQ 侧召回会变差。</span>

@@ -461,3 +461,38 @@ body {
 .patch-warn strong { color: var(--warn); white-space: nowrap; }
 .patch-warn span { flex: 1; color: var(--text-dim); }
 .patch-warn[hidden] { display: none; }
+/* ---------- 连通性自检 ---------- */
+.selftest-box {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-card);
+  max-width: 860px;
+}
+
+.selftest-head strong { font-size: 13.5px; }
+.selftest-head span {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  margin-top: 3px;
+}
+
+.selftest-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.selftest-steps {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  font-size: 12.5px;
+  line-height: 1.9;
+}
+
+.selftest-steps li.ok { color: var(--ok); }
+.selftest-steps li.fail { color: var(--bad); }

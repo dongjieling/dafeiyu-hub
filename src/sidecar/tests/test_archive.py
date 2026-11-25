@@ -125,5 +125,62 @@ class ExtractParseTest(unittest.TestCase):
         self.assertEqual(self.memory.clean_for_extract(raw), '记住一条消息，今天晚上有课')
 
 
+class SelftestCleanupTest(unittest.TestCase):
+    """自检数据清理：只删带【自检】标记的记忆。"""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix='hub_st_'))
+        self.config, self.memory, self.sync, self.crypto = fresh_env(self.tmp)
+        import selftest as selftest_mod
+
+        self.selftest = selftest_mod
+        self.db = self.tmp / 'lm.db'
+        con = sqlite3.connect(self.db)
+        con.executescript(
+            """
+            CREATE TABLE documents (id INTEGER PRIMARY KEY, text TEXT, metadata TEXT, created_at TEXT);
+            CREATE TABLE memory_atoms (id INTEGER PRIMARY KEY, parent_memory_id INTEGER, content TEXT);
+            CREATE TABLE graph_entries (id INTEGER PRIMARY KEY, source_memory_id INTEGER);
+            CREATE TABLE graph_entry_nodes (entry_id INTEGER, node_id INTEGER);
+            CREATE TABLE graph_nodes (id INTEGER PRIMARY KEY, node_value TEXT);
+            CREATE TABLE memory_sources (memory_id INTEGER, source_json TEXT);
+            """
+        )
+        con.executemany(
+            'insert into documents(id, text) values(?,?)',
+            [(1, '【自检】SELFTEST-abc 连通性测试'), (2, '他今天中午吃了牛肉面'), (3, '【自检】SELFTEST-def')],
+        )
+        con.executemany('insert into memory_atoms(id, parent_memory_id, content) values(?,?,?)',
+                        [(11, 1, '自检'), (12, 2, '牛肉面'), (13, 3, '自检')])
+        con.execute('insert into graph_entries(id, source_memory_id) values(21, 1)')
+        con.execute('insert into graph_entry_nodes(entry_id, node_id) values(21, 31)')
+        con.execute('insert into graph_nodes(id, node_value) values(31, "自检")')
+        con.commit()
+        con.close()
+
+        self.cfg = dict(self.config.CFG)
+        self.cfg['archive'] = dict(self.cfg.get('archive') or {}, lm_db=str(self.db))
+
+    def test_cleanup_removes_only_marked(self):
+        res = self.selftest.cleanup(self.cfg)
+        self.assertTrue(res['ok'], res)
+        self.assertEqual(res['removed'], 2)
+        con = sqlite3.connect(self.db)
+        left = [r[0] for r in con.execute('select id from documents order by id')]
+        atoms = [r[0] for r in con.execute('select id from memory_atoms order by id')]
+        con.close()
+        self.assertEqual(left, [2])
+        self.assertEqual(atoms, [12])
+
+    def test_cleanup_no_marker(self):
+        con = sqlite3.connect(self.db)
+        con.execute('delete from documents where text like ?', ('%【自检】%',))
+        con.commit()
+        con.close()
+        res = self.selftest.cleanup(self.cfg)
+        self.assertTrue(res['ok'], res)
+        self.assertEqual(res['removed'], 0)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

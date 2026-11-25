@@ -21,6 +21,7 @@ import memory
 import persona
 import prompt
 import retry
+import selftest
 import sync
 from config import CFG, CONFIG_PATH, LOG_PATH, SIDECAR_VERSION
 from upstream import read_upstream
@@ -117,6 +118,13 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------------- POST ----------------
     def do_POST(self):
+        if self.path in ('/v1/selftest', '/selftest'):
+            self._handle_selftest()
+            return
+        if self.path in ('/v1/selftest/cleanup', '/selftest/cleanup'):
+            self._handle_selftest_cleanup()
+            return
+
         if not self.path.startswith('/v1/chat/completions'):
             self._json(404, {'error': {'message': 'not found'}})
             return
@@ -185,6 +193,14 @@ class Handler(BaseHTTPRequestHandler):
             pass
         if user_text and reply:
             memory.schedule_memory_job(CFG, memory.clean_for_extract(user_text), memory.clean_for_extract(reply))
+
+    def _handle_selftest(self) -> None:
+        res = selftest.run(CFG)
+        self._json(200, res)
+
+    def _handle_selftest_cleanup(self) -> None:
+        res = selftest.cleanup(CFG)
+        self._json(200, res)
 
     def _handle_stream(self, resp, user_text: str) -> None:
         self.close_connection = True

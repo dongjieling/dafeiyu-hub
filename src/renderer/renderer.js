@@ -130,6 +130,59 @@ function render() {
   $('#btn-stop').disabled = !running;
 }
 
+// ---------- 连通性自检 ----------
+function renderSelftest(res) {
+  const list = document.getElementById('selftest-steps');
+  const status = document.getElementById('selftest-status');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!res || !res.steps) {
+    if (status) status.textContent = res && res.error ? '失败：' + res.error : '没有结果';
+    return;
+  }
+  for (const s of res.steps) {
+    const li = document.createElement('li');
+    li.className = s.ok ? 'ok' : 'fail';
+    li.textContent = `${s.ok ? '✅' : '❌'} ${s.name}${s.detail ? '：' + s.detail : ''}`;
+    list.appendChild(li);
+  }
+  if (status) status.textContent = res.ok ? '全部通过' : '有步骤未通过';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('btn-selftest');
+  if (btn) {
+    btn.addEventListener('click', async () => {
+      const status = document.getElementById('selftest-status');
+      const list = document.getElementById('selftest-steps');
+      if (status) status.textContent = '正在自检…';
+      if (list) list.innerHTML = '';
+      btn.disabled = true;
+      try {
+        const res = await window.hub.selftest();
+        renderSelftest(res);
+        appendLog(res.ok ? '连通性自检通过' : '连通性自检未通过');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  const clean = document.getElementById('btn-cleanup-test');
+  if (clean) {
+    clean.addEventListener('click', async () => {
+      const res = await window.hub.cleanupTestData();
+      appendLog(
+        res && res.ok
+          ? `清理测试数据：文档 ${res.removed} 条、原子 ${res.atoms} 个、节点 ${res.nodes} 个`
+          : `清理失败：${(res && res.error) || '未知错误'}`
+      );
+      const status = document.getElementById('selftest-status');
+      if (status && res && res.ok) status.textContent = `已清理 ${res.removed} 条测试记忆`;
+    });
+  }
+});
+
 // ---------- 导出归档密钥 ----------
 document.addEventListener('DOMContentLoaded', () => {
   const btn = document.getElementById('btn-export-key');

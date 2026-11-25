@@ -412,6 +412,43 @@ ipcMain.handle('hub:setConfig', (_e, patch) => {
 ipcMain.handle('hub:revealLogs', () => shell.openPath(app.getPath('userData')));
 ipcMain.handle('hub:configPath', () => hubConfigPath());
 
+// 连通性自检 / 清理测试数据（转发到 sidecar）
+function sidecarPost(pathname) {
+  return new Promise((resolve) => {
+    const req = require('node:http').request(
+      {
+        host: '127.0.0.1',
+        port: config.hubPort || 8787,
+        path: pathname,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': 2 },
+        timeout: 180000,
+      },
+      (res) => {
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (c) => (body += c));
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(body));
+          } catch {
+            resolve({ ok: false, error: body.slice(0, 200) });
+          }
+        });
+      }
+    );
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ ok: false, error: '超时' });
+    });
+    req.on('error', (e) => resolve({ ok: false, error: e.message }));
+    req.end('{}');
+  });
+}
+
+ipcMain.handle('selftest:run', () => sidecarPost('/v1/selftest'));
+ipcMain.handle('selftest:cleanup', () => sidecarPost('/v1/selftest/cleanup'));
+
 // 记忆原子补丁状态
 ipcMain.handle('archive:exportKey', async () => {
   const { dialog } = require('electron');

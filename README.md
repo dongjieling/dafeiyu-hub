@@ -51,7 +51,7 @@
 
 | 文件 | 大小 | 链接 |
 |---|---|---|
-| `dafeiyu-hub-0.4.6-portable.exe` | 105.2 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v0.4.6/dafeiyu-hub-0.4.6-portable.exe) |
+| `dafeiyu-hub-0.4.7-portable.exe` | 105.2 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v0.4.7/dafeiyu-hub-0.4.7-portable.exe) |
 
 或在 [Releases 页面](https://github.com/dongjieling/dafeiyu-hub/releases) 选择版本下载。
 
@@ -97,7 +97,7 @@ curl http://127.0.0.1:8787/health
 
 ## 版本
 
-当前版本 **v0.4.6**：提炼不再静默失败（解析容错 + token 上限）。
+当前版本 **v0.4.7**：连通性自检 + 一键清理测试数据。
 
 ## 文档
 
