@@ -67,7 +67,7 @@ DEFAULTS = {
         'model': 'deepseek-chat',
         'min_chars': 6,
         'min_importance': 0.3,
-        'max_per_turn': 2,
+        'max_per_turn': 3,
         'timeout': 45,
     },
     'archive': {

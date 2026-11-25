@@ -25,9 +25,16 @@ EXTRACT_PROMPT = """从下面这轮对话里提取值得长期记住的信息（
 值得记：他的偏好、经历、关系、计划、情绪模式、重要事件
 不值得：寒暄、语气词、重复内容、临时状态、AI 自己的话
 
+**具体事件必须单独成条，不能被习惯概括吞掉。**
+
+- 他说"我今天中午又吃的便利店" → 记 "他2026-11-25中午又吃了便利店"（具体）
+- 不要写成 "他经常吃便利店"（概括会把"今天"这个时间点丢掉）
+- 如果既发生了具体事件、又能看出习惯，优先记具体事件
+
 每条要求：
 - 不超过 40 字
 - 用第三人称写（"他说……""他喜欢……"）
+- 有时间点就写时间（今天/昨天/日期）
 - 附重要性分数 0-1，越稳定越重要
 
 只输出 JSON 数组，没有就输出 []
@@ -119,6 +126,21 @@ def _strip_fence(text: str) -> str:
     return t.strip()
 
 
+def clean_for_extract(text: str) -> str:
+    """去掉客户端前缀（时间戳、Context 块、ACT/DELAY 标记），避免污染提炼。"""
+    import re
+
+    if not text:
+        return ''
+    s = re.sub(r'\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}\]', '', text)
+    s = re.sub(r'\[Context\][\s\S]*?(?=\n\n|$)', '', s)
+    s = re.sub(r'<\|ACT [^|]*\|>', '', s)
+    s = re.sub(r'<\|DELAY \d+\|>', '', s)
+    s = re.sub(r'- system:[\w\-\.]+', '', s)
+    s = re.sub(r'\n{3,}', '\n\n', s)
+    return s.strip()
+
+
 def extract(cfg: dict, user_text: str, reply_text: str) -> list[dict]:
     ex = cfg.get('extract') or {}
     up = read_upstream(cfg)
@@ -131,7 +153,7 @@ def extract(cfg: dict, user_text: str, reply_text: str) -> list[dict]:
         'model': ex.get('model') or up['model'],
         'messages': [
             {'role': 'system', 'content': EXTRACT_PROMPT.format(max_n=max_n)},
-            {'role': 'user', 'content': f'他说：{user_text[:600]}\n她说：{reply_text[:600]}'},
+            {'role': 'user', 'content': f'他说：{clean_for_extract(user_text)[:600]}\n她说：{clean_for_extract(reply_text)[:600]}'},
         ],
         'temperature': 0.1,
         'max_tokens': 300,

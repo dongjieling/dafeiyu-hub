@@ -51,7 +51,7 @@
 
 | 文件 | 大小 | 链接 |
 |---|---|---|
-| `dafeiyu-hub-0.4.2-portable.exe` | 105.2 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v0.4.2/dafeiyu-hub-0.4.2-portable.exe) |
+| `dafeiyu-hub-0.4.3-portable.exe` | 105.2 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v0.4.3/dafeiyu-hub-0.4.3-portable.exe) |
 
 或在 [Releases 页面](https://github.com/dongjieling/dafeiyu-hub/releases) 选择版本下载。
 
@@ -97,7 +97,7 @@ curl http://127.0.0.1:8787/health
 
 ## 版本
 
-当前版本 **v0.4.2**：修复评审指出的 4 个 P0（同步回归、建表缺列、提炼加密、key_facts）。
+当前版本 **v0.4.3**：修复桌宠对话进不了记忆（提炼丢具体事件）。
 
 ## 文档
 

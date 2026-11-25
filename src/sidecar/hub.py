@@ -184,7 +184,7 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             pass
         if user_text and reply:
-            memory.schedule_memory_job(CFG, user_text, reply)
+            memory.schedule_memory_job(CFG, memory.clean_for_extract(user_text), memory.clean_for_extract(reply))
 
     def _handle_stream(self, resp, user_text: str) -> None:
         self.close_connection = True
@@ -216,7 +216,7 @@ class Handler(BaseHTTPRequestHandler):
 
         reply = ''.join(chunks)
         if user_text and reply:
-            memory.schedule_memory_job(CFG, user_text, reply)
+            memory.schedule_memory_job(CFG, memory.clean_for_extract(user_text), memory.clean_for_extract(reply))
 
 
 def main() -> None:
