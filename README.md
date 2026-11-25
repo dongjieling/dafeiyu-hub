@@ -51,7 +51,7 @@
 
 | 文件 | 大小 | 链接 |
 |---|---|---|
-| `dafeiyu-hub-0.4.0-portable.exe` | 105.2 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v0.4.0/dafeiyu-hub-0.4.0-portable.exe) |
+| `dafeiyu-hub-0.4.1-portable.exe` | 105.2 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v0.4.1/dafeiyu-hub-0.4.1-portable.exe) |
 
 或在 [Releases 页面](https://github.com/dongjieling/dafeiyu-hub/releases) 选择版本下载。
 
@@ -97,7 +97,7 @@ curl http://127.0.0.1:8787/health
 
 ## 版本
 
-当前版本 **v0.4.0**：清掉评审提出的 P0（重试门控、原子回填、发布卫生）。
+当前版本 **v0.4.1**：归档库加密（AES-256-GCM + DPAPI）。
 
 ## 文档
 

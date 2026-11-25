@@ -28,7 +28,8 @@
     "retention_days": 0,
     "sync_qq": true,
     "sync_interval_seconds": 300,
-    "qq_source_db": ""
+    "qq_source_db": "",
+    "encrypt": true
   },
   "logging": {
     "log_content": false,

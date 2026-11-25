@@ -15,6 +15,7 @@ import time
 import urllib.request
 from pathlib import Path
 
+import crypto
 from config import data_path
 from util import log
 
@@ -96,8 +97,14 @@ def retry_failed(cfg: dict, lm_ready: bool) -> int:
 
     ok = 0
     for r in rows:
+        try:
+            plain = crypto.decrypt(r['content'])
+        except Exception as e:
+            log(f'解密失败，跳过错信: {e}')
+            continue
+
         body = {
-            'content': r['content'],
+            'content': plain,
             'importance': r['importance'],
             'idempotency_key': r['idempotency_key'],
             'persona_id': cfg.get('persona_id') or 'dafeiyu',
@@ -122,7 +129,7 @@ def retry_failed(cfg: dict, lm_ready: bool) -> int:
             con.commit()
             con.close()
             ok += 1
-            log(f"重试成功: {r['content'][:24]}…")
+            log(f"重试成功: {plain[:24]}…")
         except Exception as e:
             attempts = int(r['rc']) + 1
             delay = BACKOFF_SECONDS[min(attempts - 1, len(BACKOFF_SECONDS) - 1)]
@@ -135,7 +142,7 @@ def retry_failed(cfg: dict, lm_ready: bool) -> int:
             con.commit()
             con.close()
             if status == 'dead':
-                log(f"死信（第 {attempts} 次失败，不再重试）: {r['content'][:24]}…")
+                log(f"死信（第 {attempts} 次失败，不再重试）: {plain[:24]}…")
             else:
                 log(f"重试失败（第 {attempts} 次，{delay}s 后再试）: {str(e)[:80]}")
     return ok

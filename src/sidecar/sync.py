@@ -12,6 +12,7 @@ import threading
 import time
 from pathlib import Path
 
+import crypto
 from config import data_path
 from util import log
 
@@ -101,7 +102,13 @@ def sync_qq(cfg: dict) -> int:
             )
             cur = acon.execute(
                 'insert into messages(session_id, role, content, created_at, meta) values(?,?,?,?,?)',
-                (row[0], r['role'], r['content'] or '', r['timestamp'] or now, meta),
+                (
+                    row[0],
+                    r['role'],
+                    _enc_field(cfg, r['content'] or ''),
+                    r['timestamp'] or now,
+                    _enc_field(cfg, meta),
+                ),
             )
             if cur.rowcount:
                 imported += 1

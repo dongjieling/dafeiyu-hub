@@ -11,6 +11,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+import crypto
 from config import data_path
 from upstream import read_upstream
 from util import log
@@ -245,6 +246,17 @@ def _archive_db(cfg: dict) -> Path | None:
     return data_path(arc.get('db_path') or 'archive.db')
 
 
+def _enc(cfg: dict, text: str) -> str:
+    """按配置决定是否加密字段；出错时退回明文，避免影响主流程。"""
+    try:
+        if ((cfg.get('archive') or {}).get('encrypt', True)) is False:
+            return text
+        return crypto.encrypt(text)
+    except Exception as e:
+        log(f'加密失败（已回退明文）: {e}')
+        return text
+
+
 def archive_message(cfg: dict, role: str, content: str) -> int | None:
     db = _archive_db(cfg)
     if db is None or not content:
@@ -264,7 +276,7 @@ def archive_message(cfg: dict, role: str, content: str) -> int | None:
             con.execute('UPDATE sessions SET last_active=? WHERE id=?', (now, sid))
             cur = con.execute(
                 'INSERT INTO messages (session_id, role, content, created_at) VALUES (?,?,?,?)',
-                (sid, role, content, now),
+                (sid, role, _enc(cfg, content), now),
             )
             con.commit()
             mid = cur.lastrowid

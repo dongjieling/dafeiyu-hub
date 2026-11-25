@@ -18,6 +18,10 @@ BUNDLED_CONFIG = BASE_DIR / 'config.json'
 
 # 数据目录（打包后 sidecar 目录只读，由宿主通过 HUB_DATA_DIR 指定可写目录）
 _default_data = BASE_DIR
+# 未显式指定时，优先用已存在的数据目录（保证 CLI 与打包版看到同一份数据）
+_apdata = Path(os.environ.get('APPDATA', '')) / 'dafeiyu-hub'
+if _apdata.parent.exists() and _apdata.exists():
+    _default_data = _apdata
 try:
     _env_data = os.environ.get('HUB_DATA_DIR')
     DATA_DIR = Path(_env_data) if _env_data else _default_data
@@ -73,6 +77,7 @@ DEFAULTS = {
         'sync_qq': True,
         'sync_interval_seconds': 300,
         'qq_source_db': '',
+        'encrypt': True,
     },
     'logging': {'log_content': False, 'preview_chars': 20},
     'knowledge': {

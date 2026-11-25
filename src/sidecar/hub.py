@@ -53,6 +53,11 @@ def archive_stats() -> dict:
         return {'qq': 0, 'local': 0, 'last_sync': 0}
 
 
+def _archive_encrypted() -> bool:
+    """归档是否启用字段加密（看配置，不看数据）。"""
+    return bool(((CFG.get('archive') or {}).get('encrypt', True)))
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
     server_version = 'DafeiyuHub/' + '0.3'
@@ -97,6 +102,7 @@ class Handler(BaseHTTPRequestHandler):
                 'archive_qq': archive_stats().get('qq', 0),
                 'archive_local': archive_stats().get('local', 0),
                 'qq_last_sync': archive_stats().get('last_sync', 0),
+                'archive_encrypted': _archive_encrypted(),
             })
             return
 
