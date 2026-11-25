@@ -23,7 +23,20 @@ function patchStatus() {
   } catch (err) {
     return { ok: false, state: 'unreadable', file, hint: err.message };
   }
-  if (text.includes(MARKER)) {
+  // 不能只看全文有没有这行：必须出现在 key_facts 赋值之后 5 行内，
+  // 否则可能是插件别处的同名变量，属于误判
+  const lines = text.split('\n');
+  const anchorIdx = lines.findIndex((l) => l.includes(ANCHOR));
+  if (anchorIdx === -1) {
+    return {
+      ok: false,
+      state: 'unpatched',
+      file,
+      hint: '插件结构变了（找不到 key_facts 代码行），需要人工适配',
+    };
+  }
+  const window = lines.slice(anchorIdx + 1, anchorIdx + 6).join('\n');
+  if (window.includes(MARKER)) {
     return { ok: true, state: 'patched', file };
   }
   return {

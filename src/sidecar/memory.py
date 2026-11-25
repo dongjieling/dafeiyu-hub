@@ -284,10 +284,11 @@ def record_extraction(cfg, item, idem, mem_id, status, error) -> None:
             con = sqlite3.connect(db, timeout=10)
             con.execute(
                 'INSERT OR IGNORE INTO extractions '
-                '(content, importance, idempotency_key, lm_memory_id, status, error, created_at, written_at) '
-                'VALUES (?,?,?,?,?,?,?,?)',
+                '(content, importance, idempotency_key, lm_memory_id, status, error, created_at, written_at, next_retry_at) '
+                'VALUES (?,?,?,?,?,?,?,?,?)',
                 (item['content'], item['importance'], idem, mem_id, status, error,
-                 time.time(), time.time() if status == 'written' else None),
+                 time.time(), time.time() if status == 'written' else None,
+                 time.time() + 60 if status == 'failed' else None),
             )
             con.commit()
             con.close()

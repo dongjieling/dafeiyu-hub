@@ -20,12 +20,37 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import memory
 import persona
 import prompt
+import retry
 import sync
 from config import CFG, CONFIG_PATH, LOG_PATH, SIDECAR_VERSION
 from upstream import read_upstream
 from util import init_log, log, safe_json
 
 init_log(LOG_PATH)
+
+
+def archive_stats() -> dict:
+    """归档库统计：QQ / 桌面条数、上次同步时间。"""
+    import sqlite3
+
+    from config import data_path
+
+    db = data_path((CFG.get('archive') or {}).get('db_path') or 'archive.db')
+    if not db.exists():
+        return {'qq': 0, 'local': 0, 'last_sync': 0}
+    try:
+        con = sqlite3.connect(f'file:{db}?mode=ro', uri=True, timeout=5)
+        qq = con.execute(
+            "select count(*) from messages m join sessions s on s.id=m.session_id where s.source='qq'"
+        ).fetchone()[0]
+        local = con.execute(
+            "select count(*) from messages m join sessions s on s.id=m.session_id where s.source='airi'"
+        ).fetchone()[0]
+        row = con.execute("select value from kv where key='qq_last_sync'").fetchone()
+        con.close()
+        return {'qq': qq, 'local': local, 'last_sync': float(row[0]) if row else 0}
+    except Exception:
+        return {'qq': 0, 'local': 0, 'last_sync': 0}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -67,6 +92,11 @@ class Handler(BaseHTTPRequestHandler):
                 'knowledge_kbs': len(kb.get('kb_names') or []),
                 'port': CFG.get('port'),
                 'config_file': str(CONFIG_PATH),
+                'pending_retry': retry.stats(CFG)['pending_retry'],
+                'dead_letters': retry.stats(CFG)['dead_letters'],
+                'archive_qq': archive_stats().get('qq', 0),
+                'archive_local': archive_stats().get('local', 0),
+                'qq_last_sync': archive_stats().get('last_sync', 0),
             })
             return
 
@@ -193,7 +223,7 @@ def main() -> None:
     up = read_upstream(CFG)
     kb = CFG.get('knowledge') or {}
     log(
-        f"===== 启动 v0.3 端口 {port} 人格 {len(text)} 字 上游 {up['model']} "
+        f"===== 启动 v{SIDECAR_VERSION} 端口 {port} 人格 {len(text)} 字 上游 {up['model']} "
         f"key={bool(up['key'])} 知识库={'开' if kb.get('enabled') else '关'}({len(kb.get('kb_names') or [])}库) ====="
     )
     print(f'[ready] http://127.0.0.1:{port}/v1', flush=True)

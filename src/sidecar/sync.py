@@ -43,8 +43,11 @@ def sync_qq(cfg: dict) -> int:
     if not arc.get('sync_qq', True):
         return 0
 
-    src = Path(os_path(cfg))
+    src = Path(qq_source_path(cfg))
+    if not str(src) or str(src) == '.':
+        return 0
     if not src.exists():
+        log(f'QQ 同步未配置或路径不存在: {src}')
         return 0
 
     db = _archive_db(cfg)
@@ -58,9 +61,8 @@ def sync_qq(cfg: dict) -> int:
         cursor = int(_kv_get(acon, 'qq_cursor', '0') or 0)
 
         imported = 0
-        empty_rounds = 0
         rows_all = []
-        while empty_rounds < 1 and len(rows_all) < 5000:
+        while len(rows_all) < 5000:
             batch = scon.execute(
                 'select id, session_id, role, content, sender_id, sender_name, group_id, platform, timestamp '
                 'from messages where id > ? order by id limit 500',
@@ -106,6 +108,7 @@ def sync_qq(cfg: dict) -> int:
             cursor = max(cursor, int(r['id']))
 
         _kv_set(acon, 'qq_cursor', str(cursor))
+        _kv_set(acon, 'qq_last_sync', str(time.time()))
         acon.commit()
         acon.close()
         scon.close()
@@ -118,87 +121,8 @@ def sync_qq(cfg: dict) -> int:
         return 0
 
 
-def os_path(cfg: dict) -> str:
+def qq_source_path(cfg: dict) -> str:
     return ((cfg.get('archive') or {}).get('qq_source_db')) or ''
-
-
-# ---------------- 失败重试 ----------------
-def _ensure_retry_column(db: Path) -> None:
-    try:
-        con = sqlite3.connect(db, timeout=10)
-        cols = [r[1] for r in con.execute('PRAGMA table_info(extractions)')]
-        if 'retry_count' not in cols:
-            con.execute('ALTER TABLE extractions ADD COLUMN retry_count INTEGER DEFAULT 0')
-            con.commit()
-        con.close()
-    except Exception as e:
-        log(f'重试列检查失败: {e}')
-
-
-def retry_failed(cfg: dict) -> int:
-    """重试写回失败的记忆（最多 3 次）。"""
-    db = _archive_db(cfg)
-    key = cfg.get('lm_key') or ''
-    if db is None or not key:
-        return 0
-
-    _ensure_retry_column(db)
-    try:
-        con = sqlite3.connect(db, timeout=10)
-        con.row_factory = sqlite3.Row
-        rows = con.execute(
-            "select id, content, importance, idempotency_key, retry_count from extractions "
-            "where status='failed' and coalesce(retry_count,0) < 3 order by id limit 10"
-        ).fetchall()
-        con.close()
-    except Exception as e:
-        log(f'查询待重试失败: {e}')
-        return 0
-
-    if not rows:
-        return 0
-
-    import urllib.request
-
-    ok = 0
-    for r in rows:
-        body = {
-            'content': r['content'],
-            'importance': r['importance'],
-            'idempotency_key': r['idempotency_key'],
-            'persona_id': cfg.get('persona_id') or 'dafeiyu',
-            'scope': cfg.get('write_scope') or cfg.get('scope') or '',
-            'key_facts': [r['content']],
-        }
-        req = urllib.request.Request(
-            f"{cfg['lm_base']}/memories",
-            data=json.dumps(body, ensure_ascii=False).encode('utf-8'),
-            headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'},
-            method='POST',
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=45) as resp:
-                res = json.loads(resp.read().decode('utf-8', 'ignore'))
-            mem_id = (res.get('memory') or {}).get('id') if isinstance(res, dict) else None
-            con = sqlite3.connect(db, timeout=10)
-            con.execute(
-                "update extractions set status='written', lm_memory_id=?, written_at=? where id=?",
-                (mem_id, time.time(), r['id']),
-            )
-            con.commit()
-            con.close()
-            ok += 1
-            log(f"重试成功: {r['content'][:24]}…")
-        except Exception as e:
-            con = sqlite3.connect(db, timeout=10)
-            con.execute(
-                'update extractions set retry_count=coalesce(retry_count,0)+1, error=? where id=?',
-                (str(e)[:120], r['id']),
-            )
-            con.commit()
-            con.close()
-            log(f"重试失败（第 {int(r['retry_count'] or 0) + 1} 次）: {str(e)[:80]}")
-    return ok
 
 
 # ---------------- 调度 ----------------
@@ -219,7 +143,14 @@ def start(cfg: dict) -> None:
         time.sleep(20)
         while not _stop.is_set():
             try:
-                retry_failed(cfg)
+                import memory
+                import retry as retry_mod
+
+                lm_ready = memory.probe_lm(cfg, force=True)['connected']
+                if not lm_ready:
+                    log('记忆库未就绪，本轮跳过重试（不消耗次数）')
+                else:
+                    retry_mod.retry_failed(cfg, lm_ready=True)
             except Exception as e:
                 log(f'重试循环异常: {e}')
             _stop.wait(retry_intv)

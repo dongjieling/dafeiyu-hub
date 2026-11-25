@@ -103,6 +103,23 @@ function render() {
   const verEl = $('#val-version');
   if (verEl) verEl.textContent = health?.ok ? 'v' + (health.data.version || '—') : '—';
 
+  // 归档与写入队列
+  const arcEl = document.getElementById('val-archive');
+  if (arcEl) {
+    arcEl.textContent = health?.ok ? `${health.data.archive_qq ?? 0} / ${health.data.archive_local ?? 0}` : '—';
+  }
+  const qEl = document.getElementById('val-queue');
+  if (qEl) {
+    if (!health?.ok) {
+      qEl.textContent = '—';
+    } else {
+      const pending = health.data.pending_retry ?? 0;
+      const dead = health.data.dead_letters ?? 0;
+      qEl.textContent = dead > 0 ? `待重试 ${pending} · 死信 ${dead}` : `待重试 ${pending}`;
+      qEl.style.color = dead > 0 ? 'var(--warn)' : '';
+    }
+  }
+
   const aboutVer = document.getElementById('about-version');
   if (aboutVer) aboutVer.textContent = 'v' + (state.appVersion || '—');
   const aboutSide = document.getElementById('about-sidecar');

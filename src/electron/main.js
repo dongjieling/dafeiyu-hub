@@ -414,9 +414,15 @@ ipcMain.handle('hub:configPath', () => hubConfigPath());
 
 // 记忆原子补丁状态
 ipcMain.handle('patch:status', () => atomPatch.patchStatus());
-ipcMain.handle('patch:apply', () => {
+ipcMain.handle('patch:apply', async () => {
   const res = atomPatch.applyPatch();
   log(res.ok ? '记忆原子补丁已重新打上' : '补丁失败: ' + (res.hint || res.state));
+  if (res.ok && res.state === 'patched') {
+    // 补丁只改了磁盘文件，AstrBot 进程里还是旧模块，需要重载插件才生效
+    const reload = await plug.reloadPlugin('livingmemory');
+    log(reload.ok ? '插件已重载，补丁生效' : '插件重载失败：重启 AstrBot 后生效');
+    return { ...res, reloaded: reload.ok };
+  }
   return res;
 });
 
