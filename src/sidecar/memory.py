@@ -37,8 +37,13 @@ EXTRACT_PROMPT = """从下面这轮对话里提取值得长期记住的信息（
 - 有时间点就写时间（今天/昨天/日期）
 - 附重要性分数 0-1，越稳定越重要
 
+每条还要给 2-3 个检索关键词（topics）：
+- 用口语里可能出现的说法，便于换个问法也能搜到
+- 例："他今晚要去准备辩论赛" → ["晚上安排", "辩论赛", "今晚"]
+- 不要用整句话，不要标点
+
 只输出 JSON 数组，没有就输出 []
-格式：[{{"content": "...", "importance": 0.7}}]"""
+格式：[{{"content": "...", "importance": 0.7, "topics": ["关键词1", "关键词2"]}}]"""
 
 
 # ---------------- 健康探测 ----------------
@@ -190,7 +195,17 @@ def extract(cfg: dict, user_text: str, reply_text: str) -> list[dict]:
         if content.startswith(('她', '我', '你')):
             log(f'丢弃非事实条目: {content[:30]}')
             continue
-        out.append({'content': content[:120], 'importance': round(min(max(importance, 0.0), 1.0), 2)})
+        topics = it.get('topics')
+        if not isinstance(topics, list):
+            topics = []
+        topics = [str(x).strip()[:12] for x in topics if str(x).strip()][:3]
+        out.append(
+            {
+                'content': content[:120],
+                'importance': round(min(max(importance, 0.0), 1.0), 2),
+                'topics': topics,
+            }
+        )
     return out
 
 
@@ -207,7 +222,7 @@ def write_back(cfg: dict, items: list[dict], seed: str, message_id: int | None =
             'idempotency_key': f'{seed}#{idx}',
             'persona_id': cfg.get('persona_id') or 'dafeiyu',
             'scope': cfg.get('write_scope') or cfg.get('scope') or '',
-            'topics': [item['content'][:12]],
+            'topics': (item.get('topics') or []) + [item['content'][:12]],
             'key_facts': [item['content']],
         }
         req = urllib.request.Request(
