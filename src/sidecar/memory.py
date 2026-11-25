@@ -352,17 +352,18 @@ def write_back(cfg: dict, items: list[dict], seed: str, message_id: int | None =
 
 
 # ---------------- 归档 ----------------
-def init_archive(cfg: dict) -> None:
+def init_archive(cfg: dict) -> bool:
+    """初始化/迁移归档库。返回 False 表示迁移失败（调用方应视为 FATAL）。"""
     arc = cfg.get('archive') or {}
     if not arc.get('enabled', True):
-        return
+        return True
     db = data_path(arc.get('db_path') or 'archive.db')
 
     # 迁移先跑：建表、补列、打 user_version；版本高于代码则拒绝
     res = migrations.ensure_archive(db)
     if not res.ok:
-        log(f'归档库迁移失败，归档功能停用: {res.error}')
-        return
+        log(f'归档库迁移失败: {res.error}')
+        return False
     if res.applied:
         log(f'归档库迁移: {", ".join(res.applied)} → version {res.version}')
 
@@ -390,8 +391,10 @@ def init_archive(cfg: dict) -> None:
         log(f'归档库就绪: {db.name}')
         _ensure_extra_columns(db)
         _cleanup_archive(cfg, db)
+        return True
     except Exception as e:
         log(f'归档库初始化失败: {e}')
+        return False
 
 
 def _archive_db(cfg: dict) -> Path | None:
@@ -523,6 +526,7 @@ def _ensure_extra_columns(db) -> None:
             ('last_error_at', 'REAL'),
             ('attempts', 'INTEGER DEFAULT 0'),
             ('verified_at', 'REAL'),
+            ('topics', 'TEXT'),
         ):
             if name not in cols:
                 con.execute(f'ALTER TABLE extractions ADD COLUMN {name} {decl}')

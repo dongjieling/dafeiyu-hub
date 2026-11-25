@@ -112,6 +112,8 @@ def sync_qq(cfg: dict) -> int:
             )
             if cur.rowcount:
                 imported += 1
+                if imported % 200 == 0:
+                    acon.commit()
             cursor = max(cursor, int(r['id']))
 
         _kv_set(acon, 'qq_cursor', str(cursor))

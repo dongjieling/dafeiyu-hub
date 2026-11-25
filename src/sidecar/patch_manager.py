@@ -27,8 +27,11 @@ MARKER = 'metadata["summary_schema_version"] = "v2"'
 
 # 已知支持：版本 → 锚点行 sha256 前 16 位
 KNOWN_VERSIONS = {
-    '2.14.2': '6a5e0f5f8d2e1f2b',
+    '2.14.2': 'a313cf7344082cf2',
 }
+
+# 默认不自动改第三方源码；需要显式开启
+AUTO_APPLY_DEFAULT = False
 
 
 def anchor_hash(text: str) -> str:
@@ -80,6 +83,16 @@ def status() -> PatchStatus:
         )
 
     lines = text.splitlines()
+    anchor_idx = next((i for i, l in enumerate(lines) if ANCHOR in l), -1)
+    if anchor_idx == -1:
+        return PatchStatus('anchor_missing', version, str(path), '锚点行不存在（插件结构已变）', False)
+
+    current_hash = anchor_hash(lines[anchor_idx].strip())
+    if current_hash != known:
+        return PatchStatus(
+            'anchor_mismatch', version, str(path),
+            f'锚点哈希不匹配（期望 {known}，实际 {current_hash}），需人工确认', False,
+        )
     idx = next((i for i, l in enumerate(lines) if ANCHOR in l), -1)
     if idx == -1:
         return PatchStatus('anchor_missing', version, str(path), '锚点行不存在（插件结构已变）', False)
@@ -95,7 +108,7 @@ def status() -> PatchStatus:
 
 
 def apply() -> PatchStatus:
-    """应用补丁；未知版本拒绝。"""
+    """应用补丁；未知版本或哈希不匹配拒绝。"""
     st = status()
     if st.state == 'ok':
         return st

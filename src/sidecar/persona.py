@@ -79,7 +79,18 @@ def _load_lkg() -> dict | None:
         return None
 
 
-def _save_lkg(text: str, sha: str, persona_id: str) -> None:
+def _save_lkg(text: str, sha: str, persona_id: str, refresh: bool = False) -> None:
+    """写入 LKG。
+
+    refresh=True 时：内容没变但上次验证已超过 6 小时，刷新 loaded_at，
+    避免「内容长期不变 → 被误判为过期」。
+    """
+    if refresh:
+        old = _load_lkg()
+        if old and old.get('sha256') == sha:
+            age = time.time() - float(old.get('loaded_at') or 0)
+            if age < 6 * 3600:
+                return
     payload = {
         'text': text,
         'sha256': sha,
@@ -119,9 +130,11 @@ def snapshot(cfg: dict, force: bool = False) -> PersonaSnapshot:
     read = AstrBotAdapter(cfg).read_persona()
     if read.ok:
         old = _load_lkg()
-        # 只在内容变化时重写，避免每 30 秒写盘
         if not old or old.get('sha256') != read.sha256:
             _save_lkg(read.text, read.sha256, persona_id)
+        else:
+            # 内容没变：每 6 小时刷新一次验证时间
+            _save_lkg(read.text, read.sha256, persona_id, refresh=True)
         snap = PersonaSnapshot(
             text=read.text,
             source='astrbot_db',

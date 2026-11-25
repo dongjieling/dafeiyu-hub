@@ -55,6 +55,12 @@ def _dec_content(cfg: dict, text: str) -> str:
         return text
 
 
+def _mask(cfg: dict, text: str) -> str:
+    """按 logging.log_content 决定日志里能不能出现正文。"""
+    allow = bool(((cfg.get('logging') or {}).get('log_content')) is True)
+    return text[:24] if allow else f'({len(text)}字)'
+
+
 def enabled(cfg: dict) -> bool:
     return bool((cfg.get('outbox') or {}).get('enabled', True))
 
@@ -70,9 +76,19 @@ def enqueue(cfg: dict, item: dict, idem: str, message_id: int | None = None,
         cur = con.execute(
             'INSERT OR IGNORE INTO extractions '
             '(message_id, content, importance, idempotency_key, status, error, created_at, '
-            ' retry_count, next_retry_at, attempts, verified_at) '
-            'VALUES (?,?,?,?,?,?,?,0,?,0,NULL)',
-            (message_id, _enc_content(cfg, item['content']), item['importance'], idem, status, error, time.time(), time.time()),
+            ' retry_count, next_retry_at, attempts, verified_at, topics) '
+            'VALUES (?,?,?,?,?,?,?,0,?,0,NULL,?)',
+            (
+                message_id,
+                _enc_content(cfg, item['content']),
+                item['importance'],
+                idem,
+                status,
+                error,
+                time.time(),
+                time.time(),
+                _enc_content(cfg, json.dumps(item.get('topics') or [], ensure_ascii=False)),
+            ),
         )
         con.commit()
         row_id = cur.lastrowid
@@ -100,6 +116,11 @@ def _claim(con: sqlite3.Connection, limit: int = 5) -> list[sqlite3.Row]:
 def _send_one(cfg: dict, row: sqlite3.Row, adapter: LivingMemoryAdapter) -> tuple[str, str, str]:
     """返回 (status, lm_memory_id, error)。"""
     plain = _dec_content(cfg, row['content'])
+    topics = []
+    try:
+        topics = json.loads(_dec_content(cfg, row['topics'] or '[]')) or []
+    except Exception:
+        topics = []
     body = {
         'content': plain,
         'importance': row['importance'],
@@ -107,6 +128,7 @@ def _send_one(cfg: dict, row: sqlite3.Row, adapter: LivingMemoryAdapter) -> tupl
         'persona_id': cfg.get('persona_id') or 'dafeiyu',
         'scope': cfg.get('write_scope') or cfg.get('scope') or '',
         'key_facts': [plain],
+        'topics': topics,
     }
     try:
         res = adapter.write(body)
@@ -141,8 +163,8 @@ def tick(cfg: dict) -> int:
                     "error='', next_retry_at=?, attempts=? WHERE id=?",
                     (mem_id, time.time(), time.time() + 45, attempts + 1, row['id']),
                 )
-                log(f"outbox 写入成功: {_dec_content(cfg, row['content'])[:24]}…")
-                telemetry.record('write', 'ok', 0, row['content'][:30])
+                log(f"outbox 写入成功: {_mask(cfg, _dec_content(cfg, row['content']))}")
+                telemetry.record('write', 'ok', 0, _mask(cfg, _dec_content(cfg, row['content'])))
             else:
                 attempts += 1
                 delay = BACKOFF[min(attempts - 1, len(BACKOFF) - 1)]
@@ -197,7 +219,7 @@ def verify_index(cfg: dict, limit: int = 5) -> int:
                 if tries >= INDEX_RETRY_LIMIT:
                     # 写入已成功，只是没在窗口内确认可检索：标为「未确认」，不算失败
                     con.execute("UPDATE extractions SET status='index_unconfirmed' WHERE id=?", (row['id'],))
-                    log(f"索引未确认（已重试 {tries} 次，写入本身成功）: {row['content'][:24]}…")
+                    log(f"索引未确认（已重试 {tries} 次，写入本身成功）: {_mask(cfg, row['content'])}")
                 else:
                     con.execute(
                         "UPDATE extractions SET attempts=attempts+1, next_retry_at=? WHERE id=?",

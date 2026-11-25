@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS extractions (
   next_retry_at REAL,
   last_error_at REAL,
   attempts INTEGER DEFAULT 0,
-  verified_at REAL
+  verified_at REAL,
+  topics TEXT
 );
 CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT);
 """
@@ -85,6 +86,7 @@ def ensure_archive(db: Path, backup: bool = True) -> MigrationResult:
     if not db.exists():
         con = sqlite3.connect(db)
         try:
+            con.execute('PRAGMA journal_mode=WAL')
             con.executescript(BASE_SCHEMA)
             _set_version(con, ARCHIVE_SCHEMA_VERSION)
             con.commit()
@@ -99,11 +101,12 @@ def ensure_archive(db: Path, backup: bool = True) -> MigrationResult:
         try:
             shutil.copy2(db, backup_path)
         except Exception as e:
-            log(f'迁移前备份失败: {e}')
-            backup_path = ''
+            log(f'迁移前备份失败，终止迁移: {e}')
+            return MigrationResult(False, _user_version(sqlite3.connect(db)), [], '', f'备份失败: {e}')
 
     con = sqlite3.connect(db, timeout=20)
     try:
+        con.execute('PRAGMA journal_mode=WAL')
         version = _user_version(con)
         if version > ARCHIVE_SCHEMA_VERSION:
             raise IncompatibleArchive(
@@ -121,6 +124,7 @@ def ensure_archive(db: Path, backup: bool = True) -> MigrationResult:
                 ('last_error_at', 'REAL'),
                 ('attempts', 'INTEGER DEFAULT 0'),
                 ('verified_at', 'REAL'),
+                ('topics', 'TEXT'),
             ):
                 if name not in cols:
                     con.execute(f'ALTER TABLE extractions ADD COLUMN {name} {decl}')

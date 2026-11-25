@@ -68,12 +68,33 @@ def _archive_encrypted() -> bool:
 _compat_state: dict = {'report': {}, 'checked_at': 0.0}
 
 
+def startup_contracts(cfg: dict, migration_ok: bool, config_exists: bool) -> list:
+    """启动时的 FATAL 检查（可单测）。"""
+    from contracts import ContractResult, Severity
+    from upstream import read_upstream
+
+    out = []
+    if not config_exists:
+        out.append(ContractResult('hub.config', False, Severity.FATAL, detail='配置文件不存在'))
+
+    up = read_upstream(cfg)
+    if not (up.get('key') or '').strip():
+        out.append(ContractResult('hub.upstream', False, Severity.FATAL,
+                                  detail='上游 API Key 缺失（检查 AstrBot 配置路径）'))
+
+    if not migration_ok:
+        out.append(ContractResult('hub.archive', False, Severity.FATAL,
+                                  detail='归档库迁移失败，已拒绝启动'))
+    return out
+
+
 def compat_report() -> dict:
     """最近一次契约检查结果（不含正文，可安全暴露）。"""
     return _compat_state['report']
 
 
-def refresh_compat(auto_patch: bool = True) -> dict:
+def refresh_compat(auto_patch: bool = True, startup_checks: bool = False,
+                   migration_ok: bool = True) -> dict:
     """重新探测所有已知契约（1b 起含 LM / scope / 补丁）。"""
     from adapters import AstrBotAdapter, LivingMemoryAdapter
     from contracts import CompatReport
@@ -95,9 +116,16 @@ def refresh_compat(auto_patch: bool = True) -> dict:
         log(f'契约检查异常（scope）: {e}')
 
     try:
-        report.add(patch_manager.probe(auto_apply=auto_patch))
+        report.add(patch_manager.probe(auto_apply=auto_patch and patch_manager.AUTO_APPLY_DEFAULT))
     except Exception as e:
+        from contracts import ContractResult, Severity
+
         log(f'契约检查异常（补丁）: {e}')
+        report.add(ContractResult('livingmemory.patch', False, Severity.DEGRADED, detail=str(e)[:80]))
+
+    if startup_checks:
+        for item in startup_contracts(CFG, migration_ok, CONFIG_PATH.exists()):
+            report.add(item)
 
     data = report.to_dict()
     _compat_state['report'] = data['contracts']
@@ -322,8 +350,15 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    memory.init_archive(CFG)
-    refresh_compat(auto_patch=True)
+    migration_ok = memory.init_archive(CFG)
+    report = refresh_compat(auto_patch=True, startup_checks=True, migration_ok=migration_ok)
+    if report.get('overall') == 'fatal':
+        failed = [k for k, v in report['contracts'].items() if v['severity'] == 'fatal']
+        log(f"启动被拒绝（FATAL）: {', '.join(failed)}")
+        print(f'[fatal] {", ".join(failed)}', flush=True)
+        raise SystemExit(1)
+    if report.get('overall') != 'ok':
+        log(f"启动降级: {report.get('overall')}")
     start_compat_monitor()
     outbox.start(CFG)
     sync.start(CFG)
