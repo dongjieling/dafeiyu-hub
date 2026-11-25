@@ -109,7 +109,7 @@ def retry_failed(cfg: dict, lm_ready: bool) -> int:
             'idempotency_key': r['idempotency_key'],
             'persona_id': cfg.get('persona_id') or 'dafeiyu',
             'scope': cfg.get('write_scope') or cfg.get('scope') or '',
-            'key_facts': [r['content']],
+            'key_facts': [plain],
         }
         req = urllib.request.Request(
             f"{cfg['lm_base']}/memories",

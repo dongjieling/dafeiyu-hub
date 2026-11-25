@@ -128,6 +128,17 @@ def sync_qq(cfg: dict) -> int:
         return 0
 
 
+def _enc_field(cfg: dict, text: str) -> str:
+    """按配置加密字段；失败时退回明文，避免影响同步。"""
+    try:
+        if ((cfg.get('archive') or {}).get('encrypt', True)) is False:
+            return text
+        return crypto.encrypt(text)
+    except Exception as e:
+        log(f'加密失败（已回退明文）: {e}')
+        return text
+
+
 def qq_source_path(cfg: dict) -> str:
     return ((cfg.get('archive') or {}).get('qq_source_db')) or ''
 

@@ -71,6 +71,14 @@ def main() -> int:
     )['version']
     print(f'=== 构建 v{version} ===')
 
+    # 版本必须写进 package.json，否则构建出来的还是旧版本号
+    pkg_path = APP / 'package.json'
+    pkg = json.loads(pkg_path.read_text(encoding='utf-8'))
+    if pkg.get('version') != version:
+        pkg['version'] = version
+        pkg_path.write_text(json.dumps(pkg, ensure_ascii=False, indent=2), encoding='utf-8')
+        print(f'已写入版本 {version} → app/package.json')
+
     if not EXAMPLE.exists():
         print('缺少 config.example.json，无法生成干净模板')
         return 2

@@ -173,7 +173,7 @@ def extract(cfg: dict, user_text: str, reply_text: str) -> list[dict]:
 
 
 # ---------------- 写回 ----------------
-def write_back(cfg: dict, items: list[dict], seed: str) -> int:
+def write_back(cfg: dict, items: list[dict], seed: str, message_id: int | None = None) -> int:
     key = cfg.get('lm_key') or ''
     if not items or not key:
         return 0
@@ -199,10 +199,10 @@ def write_back(cfg: dict, items: list[dict], seed: str) -> int:
                 res = json.loads(r.read().decode('utf-8', 'ignore'))
             mem_id = (res.get('memory') or {}).get('id') if isinstance(res, dict) else None
             written += 1
-            record_extraction(cfg, item, f'{seed}#{idx}', mem_id, 'written', None)
+            record_extraction(cfg, item, f'{seed}#{idx}', mem_id, 'written', None, message_id)
             log(f"写回记忆: {item['content'][:30]}… (重要性 {item['importance']})")
         except Exception as e:
-            record_extraction(cfg, item, f'{seed}#{idx}', None, 'failed', str(e)[:120])
+            record_extraction(cfg, item, f'{seed}#{idx}', None, 'failed', str(e)[:120], message_id)
             log(f'写回失败: {str(e)[:120]}')
     return written
 
@@ -227,13 +227,15 @@ def init_archive(cfg: dict) -> None:
             CREATE TABLE IF NOT EXISTS extractions (
               id INTEGER PRIMARY KEY, message_id INTEGER, content TEXT NOT NULL,
               importance REAL DEFAULT 0.5, idempotency_key TEXT UNIQUE, lm_memory_id TEXT,
-              status TEXT DEFAULT 'pending', error TEXT, created_at REAL NOT NULL, written_at REAL);
+              status TEXT DEFAULT 'pending', error TEXT, created_at REAL NOT NULL, written_at REAL,
+              retry_count INTEGER DEFAULT 0, next_retry_at REAL, last_error_at REAL);
             CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT);
             '''
         )
         con.commit()
         con.close()
         log(f'归档库就绪: {db.name}')
+        _ensure_extra_columns(db)
         _cleanup_archive(cfg, db)
     except Exception as e:
         log(f'归档库初始化失败: {e}')
@@ -287,7 +289,7 @@ def archive_message(cfg: dict, role: str, content: str) -> int | None:
         return None
 
 
-def record_extraction(cfg, item, idem, mem_id, status, error) -> None:
+def record_extraction(cfg, item, idem, mem_id, status, error, message_id: int | None = None) -> None:
     db = _archive_db(cfg)
     if db is None:
         return
@@ -296,11 +298,21 @@ def record_extraction(cfg, item, idem, mem_id, status, error) -> None:
             con = sqlite3.connect(db, timeout=10)
             con.execute(
                 'INSERT OR IGNORE INTO extractions '
-                '(content, importance, idempotency_key, lm_memory_id, status, error, created_at, written_at, next_retry_at) '
-                'VALUES (?,?,?,?,?,?,?,?,?)',
-                (item['content'], item['importance'], idem, mem_id, status, error,
-                 time.time(), time.time() if status == 'written' else None,
-                 time.time() + 60 if status == 'failed' else None),
+                '(message_id, content, importance, idempotency_key, lm_memory_id, status, error, '
+                ' created_at, written_at, next_retry_at) '
+                'VALUES (?,?,?,?,?,?,?,?,?,?)',
+                (
+                    message_id,
+                    _enc(cfg, item['content']),
+                    item['importance'],
+                    idem,
+                    mem_id,
+                    status,
+                    error,
+                    time.time(),
+                    time.time() if status == 'written' else None,
+                    time.time() + 60 if status == 'failed' else None,
+                ),
             )
             con.commit()
             con.close()
@@ -324,11 +336,33 @@ def schedule_memory_job(cfg: dict, user_text: str, reply_text: str) -> None:
             items = extract(cfg, user_text, reply_text)
             if not items:
                 return
-            write_back(cfg, items, f'airi:msg{mid or int(time.time())}')
+            write_back(cfg, items, f'airi:msg{mid or int(time.time())}', mid)
         except Exception as e:
             log(f'记忆任务异常: {e}')
 
     threading.Thread(target=worker, daemon=True).start()
+
+
+def _ensure_extra_columns(db) -> None:
+    """老库升级：补齐重试相关列（无条件执行，不等重试循环）。"""
+    try:
+        con = sqlite3.connect(db, timeout=10)
+        cols = {r[1] for r in con.execute('PRAGMA table_info(extractions)')}
+        added = []
+        for name, decl in (
+            ('retry_count', 'INTEGER DEFAULT 0'),
+            ('next_retry_at', 'REAL'),
+            ('last_error_at', 'REAL'),
+        ):
+            if name not in cols:
+                con.execute(f'ALTER TABLE extractions ADD COLUMN {name} {decl}')
+                added.append(name)
+        if added:
+            con.commit()
+            log(f'归档库升级: 新增列 {", ".join(added)}')
+        con.close()
+    except Exception as e:
+        log(f'归档库补列失败: {e}')
 
 
 def _cleanup_archive(cfg: dict, db) -> None:

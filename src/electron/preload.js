@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('hub', {
 
   // 记忆原子补丁
   patchStatus: () => ipcRenderer.invoke('patch:status'),
+  exportArchiveKey: () => ipcRenderer.invoke('archive:exportKey'),
   patchApply: () => ipcRenderer.invoke('patch:apply'),
 
   // 参数调整

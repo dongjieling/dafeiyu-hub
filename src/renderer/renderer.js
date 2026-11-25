@@ -130,6 +130,17 @@ function render() {
   $('#btn-stop').disabled = !running;
 }
 
+// ---------- 导出归档密钥 ----------
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('btn-export-key');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    const res = await window.hub.exportArchiveKey();
+    if (res.canceled) return;
+    appendLog(res.ok ? `归档密钥已导出：${res.path}` : `导出失败：${res.error || ''}`);
+  });
+});
+
 // ---------- 记忆原子补丁 ----------
 async function refreshPatch() {
   try {

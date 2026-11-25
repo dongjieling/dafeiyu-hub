@@ -413,6 +413,36 @@ ipcMain.handle('hub:revealLogs', () => shell.openPath(app.getPath('userData')));
 ipcMain.handle('hub:configPath', () => hubConfigPath());
 
 // 记忆原子补丁状态
+ipcMain.handle('archive:exportKey', async () => {
+  const { dialog } = require('electron');
+  const res = await dialog.showSaveDialog(win, {
+    title: '导出归档密钥',
+    defaultPath: 'archive.key.bak',
+    filters: [{ name: '密钥文件', extensions: ['bak', 'key', 'bin'] }],
+  });
+  if (res.canceled || !res.filePath) return { ok: false, canceled: true };
+
+  const py = findPython();
+  if (!py) return { ok: false, error: '找不到 Python' };
+  const script = path.join(path.dirname(sidecarScriptPath()), 'crypto.py');
+  return new Promise((resolve) => {
+    require('node:child_process').execFile(
+      py,
+      ['-X', 'utf8', script, '--export', res.filePath],
+      { env: { ...process.env, HUB_DATA_DIR: dataDir }, timeout: 30000 },
+      (err, stdout, stderr) => {
+        if (err) {
+          log('导出密钥失败: ' + (stderr || err.message));
+          resolve({ ok: false, error: (stderr || err.message || '').slice(0, 200) });
+        } else {
+          log('归档密钥已导出到 ' + res.filePath);
+          resolve({ ok: true, path: res.filePath });
+        }
+      }
+    );
+  });
+});
+
 ipcMain.handle('patch:status', () => atomPatch.patchStatus());
 ipcMain.handle('patch:apply', async () => {
   const res = atomPatch.applyPatch();
