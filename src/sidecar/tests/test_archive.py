@@ -160,6 +160,7 @@ class SelftestCleanupTest(unittest.TestCase):
 
         self.cfg = dict(self.config.CFG)
         self.cfg['archive'] = dict(self.cfg.get('archive') or {}, lm_db=str(self.db))
+        self.cfg['maintenance_mode'] = True
 
     def test_cleanup_removes_only_marked(self):
         res = self.selftest.cleanup(self.cfg)

@@ -13,16 +13,22 @@ from __future__ import annotations
 
 import json
 import ssl
+import threading
+import time
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import memory
+import outbox
 import persona
 import prompt
+import patch_manager
 import retry
+import scope
 import selftest
 import sync
+import telemetry
 from config import CFG, CONFIG_PATH, LOG_PATH, SIDECAR_VERSION
 from upstream import read_upstream
 from util import init_log, log, safe_json
@@ -59,6 +65,63 @@ def _archive_encrypted() -> bool:
     return bool(((CFG.get('archive') or {}).get('encrypt', True)))
 
 
+_compat_state: dict = {'report': {}, 'checked_at': 0.0}
+
+
+def compat_report() -> dict:
+    """最近一次契约检查结果（不含正文，可安全暴露）。"""
+    return _compat_state['report']
+
+
+def refresh_compat(auto_patch: bool = True) -> dict:
+    """重新探测所有已知契约（1b 起含 LM / scope / 补丁）。"""
+    from adapters import AstrBotAdapter, LivingMemoryAdapter
+    from contracts import CompatReport
+
+    report = CompatReport()
+    try:
+        report.add(AstrBotAdapter(CFG).probe_persona())
+    except Exception as e:
+        log(f'契约检查异常（persona）: {e}')
+
+    try:
+        report.add(LivingMemoryAdapter(CFG).probe())
+    except Exception as e:
+        log(f'契约检查异常（LM）: {e}')
+
+    try:
+        report.add(scope.validate(CFG))
+    except Exception as e:
+        log(f'契约检查异常（scope）: {e}')
+
+    try:
+        report.add(patch_manager.probe(auto_apply=auto_patch))
+    except Exception as e:
+        log(f'契约检查异常（补丁）: {e}')
+
+    data = report.to_dict()
+    _compat_state['report'] = data['contracts']
+    _compat_state['checked_at'] = time.time()
+    if data['overall'] != 'ok':
+        failed = [k for k, v in data['contracts'].items() if not v['ok']]
+        log(f"契约检查: {data['overall']}（{', '.join(failed) or '无失败项'}）")
+    return data
+
+
+def start_compat_monitor(interval: int = 300) -> None:
+    def loop():
+        time.sleep(10)
+        while True:
+            try:
+                refresh_compat(auto_patch=True)
+            except Exception as e:
+                log(f'契约监控异常: {e}')
+            time.sleep(interval)
+
+    threading.Thread(target=loop, daemon=True, name='compat-monitor').start()
+    log(f'契约监控已启动（每 {interval} 秒）')
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
     server_version = 'DafeiyuHub/' + '0.3'
@@ -80,7 +143,7 @@ class Handler(BaseHTTPRequestHandler):
     # ---------------- GET ----------------
     def do_GET(self):
         if self.path.startswith('/health'):
-            text = persona.read_persona(CFG)
+            snap = persona.snapshot(CFG)
             up = read_upstream(CFG)
             lm = memory.probe_lm(CFG)
             kb = CFG.get('knowledge') or {}
@@ -88,7 +151,12 @@ class Handler(BaseHTTPRequestHandler):
                 'status': 'ok',
                 'version': SIDECAR_VERSION,
                 'persona_id': CFG.get('persona_id'),
-                'persona_chars': len(text),
+                'persona_chars': snap.chars,
+                'persona_ok': snap.ok and not snap.degraded,
+                'persona_source': snap.source,
+                'persona_stale': snap.stale,
+                'persona_sha256': snap.sha256[:16],
+                'persona_loaded_at': int(snap.loaded_at),
                 'upstream_model': up['model'],
                 'upstream_base': up['base'],
                 'upstream_key_loaded': bool(up['key']),
@@ -103,6 +171,10 @@ class Handler(BaseHTTPRequestHandler):
                 'archive_qq': archive_stats().get('qq', 0),
                 'archive_local': archive_stats().get('local', 0),
                 'qq_last_sync': archive_stats().get('last_sync', 0),
+                'compat': compat_report(),
+                'compat_checked_at': int(_compat_state['checked_at']),
+                'outbox': outbox.stats(CFG),
+                'pipeline': telemetry.summary(),
                 'archive_encrypted': _archive_encrypted(),
             })
             return
@@ -129,6 +201,9 @@ class Handler(BaseHTTPRequestHandler):
             self._json(404, {'error': {'message': 'not found'}})
             return
 
+        trace = telemetry.new_trace()
+        self._trace = trace
+        t0 = time.time()
         length = int(self.headers.get('Content-Length') or 0)
         raw = self.rfile.read(length) if length else b'{}'
         payload = safe_json(raw, None)
@@ -167,10 +242,14 @@ class Handler(BaseHTTPRequestHandler):
         except urllib.error.HTTPError as e:
             detail = e.read().decode('utf-8', 'ignore')[:400]
             log(f'上游 HTTP {e.code}: {detail}')
+            telemetry.record('upstream', 'http_error', int((time.time() - t0) * 1000),
+                             f'{e.code} {detail[:80]}', trace)
             self._json(e.code, {'error': {'message': detail}})
             return
         except Exception as e:
             log(f'上游连接失败: {e}')
+            telemetry.record('upstream', 'connect_error', int((time.time() - t0) * 1000),
+                             str(e)[:80], trace)
             self._json(502, {'error': {'message': str(e)}})
             return
 
@@ -191,8 +270,11 @@ class Handler(BaseHTTPRequestHandler):
             reply = json.loads(data.decode('utf-8', 'ignore'))['choices'][0]['message']['content']
         except Exception:
             pass
+        telemetry.record('upstream', 'ok', int((time.time() - t0) * 1000),
+                         f'model={model} msgs={len(body["messages"])}', trace)
         if user_text and reply:
-            memory.schedule_memory_job(CFG, memory.clean_for_extract(user_text), memory.clean_for_extract(reply))
+            memory.schedule_memory_job(CFG, memory.clean_for_extract(user_text),
+                                       memory.clean_for_extract(reply), trace)
 
     def _handle_selftest(self) -> None:
         res = selftest.run(CFG)
@@ -203,6 +285,7 @@ class Handler(BaseHTTPRequestHandler):
         self._json(200, res)
 
     def _handle_stream(self, resp, user_text: str) -> None:
+        self._trace = getattr(self, "_trace", "")
         self.close_connection = True
         self.send_response(200)
         self.send_header('Content-Type', 'text/event-stream; charset=utf-8')
@@ -231,12 +314,18 @@ class Handler(BaseHTTPRequestHandler):
             resp.close()
 
         reply = ''.join(chunks)
+        telemetry.record('upstream_stream', 'ok' if reply else 'empty', 0,
+                         f'{len(chunks)} chunks', getattr(self, '_trace', ''))
         if user_text and reply:
-            memory.schedule_memory_job(CFG, memory.clean_for_extract(user_text), memory.clean_for_extract(reply))
+            memory.schedule_memory_job(CFG, memory.clean_for_extract(user_text),
+                                       memory.clean_for_extract(reply), getattr(self, '_trace', ''))
 
 
 def main() -> None:
     memory.init_archive(CFG)
+    refresh_compat(auto_patch=True)
+    start_compat_monitor()
+    outbox.start(CFG)
     sync.start(CFG)
     port = int(CFG.get('port') or 8787)
     server = ThreadingHTTPServer(('127.0.0.1', port), Handler)

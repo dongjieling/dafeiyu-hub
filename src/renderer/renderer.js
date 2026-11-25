@@ -103,6 +103,56 @@ function render() {
   const verEl = $('#val-version');
   if (verEl) verEl.textContent = health?.ok ? 'v' + (health.data.version || '—') : '—';
 
+  // 最近流水线
+  const pl = document.getElementById('pipeline-list');
+  if (pl && health?.ok) {
+    const p = health.data.pipeline || {};
+    pl.innerHTML = '';
+    for (const ev of (p.recent || []).slice(-6)) {
+      const li = document.createElement('li');
+      li.className = ev.outcome === 'ok' ? 'ok' : 'bad';
+      const time = new Date((ev.ts || 0) * 1000).toLocaleTimeString('zh-CN', { hour12: false });
+      li.textContent = `${time} ${ev.stage} ${ev.outcome}${ev.ms ? ' ' + ev.ms + 'ms' : ''}${ev.detail ? ' · ' + ev.detail : ''}`;
+      pl.appendChild(li);
+    }
+    const failEl = document.getElementById('pipeline-fail');
+    if (failEl) {
+      failEl.textContent = p.last_failure
+        ? `最后失败：${p.last_failure.stage} / ${p.last_failure.outcome}`
+        : '';
+      failEl.style.color = p.last_failure ? 'var(--bad)' : '';
+    }
+  }
+
+  // 人格降级提示
+  const pw = document.getElementById('persona-warn');
+  if (pw) {
+    const src = health?.data?.persona_source || '';
+    const stale = Boolean(health?.data?.persona_stale);
+    if (!health?.ok || !src || src === 'astrbot_db') {
+      pw.hidden = true;
+      pw.classList.remove('is-red', 'is-yellow');
+    } else {
+      pw.hidden = false;
+      const title = document.getElementById('persona-warn-title');
+      const text = document.getElementById('persona-warn-text');
+      const red = src === 'fallback' || src === 'builtin' || stale;
+      pw.classList.toggle('is-red', red);
+      pw.classList.toggle('is-yellow', !red);
+      if (title) title.textContent = red ? '人格未正常加载' : '人格使用缓存';
+      if (text) {
+        text.textContent =
+          src === 'lkg'
+            ? stale
+              ? '缓存超过 24 小时，她可能不像她，请检查 AstrBot'
+              : 'AstrBot 暂时读不到，正在用上次缓存'
+            : src === 'fallback'
+              ? '读取人格失败，正在用内置精简版'
+              : '人格与兜底都不可用，正在用内置常量';
+      }
+    }
+  }
+
   // 归档与写入队列
   const arcEl = document.getElementById('val-archive');
   if (arcEl) {
@@ -168,19 +218,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  const clean = document.getElementById('btn-cleanup-test');
-  if (clean) {
-    clean.addEventListener('click', async () => {
-      const res = await window.hub.cleanupTestData();
-      appendLog(
-        res && res.ok
-          ? `清理测试数据：文档 ${res.removed} 条、原子 ${res.atoms} 个、节点 ${res.nodes} 个`
-          : `清理失败：${(res && res.error) || '未知错误'}`
-      );
-      const status = document.getElementById('selftest-status');
-      if (status && res && res.ok) status.textContent = `已清理 ${res.removed} 条测试记忆`;
-    });
-  }
 });
 
 // ---------- 导出归档密钥 ----------

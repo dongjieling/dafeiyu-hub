@@ -61,6 +61,9 @@ DEFAULTS = {
     'lm_timeout': 6,
     'recall_k': 8,
     'write_scope': '',
+    'write_scope_check': 'warn',
+    'maintenance_mode': False,
+    'outbox': {'enabled': True},
     'scope': 'airi:desktop',
     'extract': {
         'enabled': True,

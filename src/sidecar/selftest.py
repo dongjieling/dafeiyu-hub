@@ -129,7 +129,13 @@ def run(cfg: dict, wait_seconds: int = 25) -> dict:
 
 
 def cleanup(cfg: dict) -> dict:
-    """删除带【自检】标记的记忆与相关图谱、原子。"""
+    """删除带【自检】标记的记忆与相关图谱、原子。
+
+    维护模式专用：直写插件数据库有风险，必须显式开启。
+    """
+    if not cfg.get('maintenance_mode'):
+        return {'ok': False, 'error': '需维护模式（config.maintenance_mode=true）才能清理数据库', 'removed': 0}
+
     db = _lm_db_path(cfg)
     if db is None or not db.exists():
         return {'ok': False, 'error': '找不到记忆库文件', 'removed': 0}

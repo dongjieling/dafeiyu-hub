@@ -12,6 +12,10 @@ import urllib.request
 from pathlib import Path
 
 import crypto
+import migrations
+import quality
+import telemetry
+import scope
 from config import data_path
 from upstream import read_upstream
 from util import log
@@ -35,7 +39,10 @@ EXTRACT_PROMPT = """从下面这轮对话里提取值得长期记住的信息（
 - 不超过 40 字
 - 用第三人称写（"他说……""他喜欢……"）
 - 有时间点就写时间（今天/昨天/日期）
-- 附重要性分数 0-1，越稳定越重要
+- 附两个分数（0-1）：
+  - `importance`：这条信息对他有多重要（丢了对理解他有影响吗）
+  - `stability`：多稳定（长期偏好/关系给高分，一次性事件给低分）
+  具体事件 importance 可以高，但 stability 低；性格偏好相反
 
 每条还要给 3-5 个检索关键词（topics），**必须包含一个宽泛类别词**：
 - 类别词从这个集合里选：健康 饮食 工作 学习 出行 情绪 关系 金钱 计划 娱乐
@@ -46,7 +53,8 @@ EXTRACT_PROMPT = """从下面这轮对话里提取值得长期记住的信息（
 - 不要用整句话，不要标点
 
 只输出 JSON 数组，没有就输出 []
-格式：[{{"content": "...", "importance": 0.7, "topics": ["类别", "关键词2", "关键词3"]}}]"""
+格式：[{{"content": "...", "importance": 0.7, "stability": 0.4,
+        "topics": ["类别", "关键词2", "关键词3"]}}]"""
 
 
 # ---------------- 健康探测 ----------------
@@ -86,11 +94,14 @@ def recall(cfg: dict, query: str) -> list[str]:
     if not key or not (query or '').strip():
         return []
 
+    scope_value = cfg.get('write_scope') or cfg.get('scope') or ''
     body = {
         'query': query[:500],
         'k': int(cfg.get('recall_k') or 8),
         'persona_id': cfg.get('persona_id') or 'dafeiyu',
     }
+    if scope_value:
+        body['scope'] = scope_value
     req = urllib.request.Request(
         f"{cfg['lm_base']}/recall",
         data=json.dumps(body, ensure_ascii=False).encode('utf-8'),
@@ -113,6 +124,11 @@ def recall(cfg: dict, query: str) -> list[str]:
             text = it.get('content') or it.get('text') or it.get('memory')
             if text:
                 out.append(str(text))
+    if scope_value:
+        items_for_filter = [{'content': x} for x in out]
+        filtered = quality.filter_by_scope(items_for_filter, scope_value)
+        out = [x['content'] for x in filtered]
+
     out = out[:12]
     if _log_content(cfg):
         preview = int(((cfg.get('logging') or {}).get('preview_chars')) or 20)
@@ -240,10 +256,11 @@ def extract(cfg: dict, user_text: str, reply_text: str) -> list[dict]:
         if not isinstance(topics, list):
             topics = []
         topics = [str(x).strip()[:12] for x in topics if str(x).strip()][:5]
+        score = quality.final_importance(importance, it.get('stability'))
         out.append(
             {
                 'content': content[:120],
-                'importance': round(min(max(importance, 0.0), 1.0), 2),
+                'importance': score,
                 'topics': topics,
             }
         )
@@ -255,6 +272,55 @@ def write_back(cfg: dict, items: list[dict], seed: str, message_id: int | None =
     key = cfg.get('lm_key') or ''
     if not items or not key:
         return 0
+
+    if not scope.can_write_back(cfg):
+        detail = scope.validate(cfg).detail
+        log(f'写回已暂停（作用域校验未通过）: {detail}')
+        for idx, item in enumerate(items):
+            record_extraction(cfg, item, f'{seed}#{idx}', None, 'scope_blocked', detail, message_id)
+        return 0
+
+    # 写前去重：先查本地 extractions（不受 LM 索引延迟影响），再补一次召回
+    scope_value = cfg.get('write_scope') or cfg.get('scope') or ''
+    existing: list[str] = []
+    try:
+        existing = recall(cfg, items[0]['content'][:40])[:5]
+    except Exception:
+        existing = []
+    try:
+        db = _archive_db(cfg)
+        if db is not None:
+            con = sqlite3.connect(f'file:{db}?mode=ro', uri=True, timeout=5)
+            rows = con.execute(
+                "select content from extractions where status != 'duplicate' "
+                'order by id desc limit 50'
+            ).fetchall()
+            con.close()
+            existing.extend(_dec(cfg, r[0]) for r in rows if r[0])
+    except Exception as e:
+        log(f'本地去重查询失败: {e}')
+
+    kept = []
+    for idx, item in enumerate(items):
+        if quality.is_duplicate(cfg, item['content'], existing):
+            log(f"重复记忆已跳过: {item['content'][:30]}")
+            record_extraction(cfg, item, f'{seed}#{idx}', None, 'duplicate', '与已有记忆高度相似', message_id)
+            continue
+        kept.append((idx, item))
+    if not kept:
+        return 0
+
+    # outbox：只入队，由后台 worker 负责发送与重试
+    import outbox
+
+    if outbox.enabled(cfg):
+        queued = 0
+        for idx, item in kept:
+            if outbox.enqueue(cfg, item, f'{seed}#{idx}', message_id):
+                queued += 1
+        if queued:
+            log(f'已入队 {queued} 条待写入记忆（跳过 {len(items) - queued} 条重复）')
+        return queued
     written = 0
     for idx, item in enumerate(items):
         body = {
@@ -291,6 +357,15 @@ def init_archive(cfg: dict) -> None:
     if not arc.get('enabled', True):
         return
     db = data_path(arc.get('db_path') or 'archive.db')
+
+    # 迁移先跑：建表、补列、打 user_version；版本高于代码则拒绝
+    res = migrations.ensure_archive(db)
+    if not res.ok:
+        log(f'归档库迁移失败，归档功能停用: {res.error}')
+        return
+    if res.applied:
+        log(f'归档库迁移: {", ".join(res.applied)} → version {res.version}')
+
     try:
         con = sqlite3.connect(db, timeout=10)
         con.executescript(
@@ -324,6 +399,13 @@ def _archive_db(cfg: dict) -> Path | None:
     if not arc.get('enabled', True):
         return None
     return data_path(arc.get('db_path') or 'archive.db')
+
+
+def _dec(cfg: dict, text: str) -> str:
+    try:
+        return crypto.decrypt(text)
+    except Exception:
+        return text
 
 
 def _enc(cfg: dict, text: str) -> str:
@@ -399,22 +481,30 @@ def record_extraction(cfg, item, idem, mem_id, status, error, message_id: int | 
 
 
 # ---------------- 后台任务 ----------------
-def schedule_memory_job(cfg: dict, user_text: str, reply_text: str) -> None:
+def schedule_memory_job(cfg: dict, user_text: str, reply_text: str, trace: str = '') -> None:
     ex = cfg.get('extract') or {}
     enabled = bool(ex.get('enabled', True))
     min_chars = int(ex.get('min_chars') or 6)
 
     def worker():
+        t_start = time.time()
         try:
             mid = archive_message(cfg, 'user', user_text)
             archive_message(cfg, 'assistant', reply_text)
+            telemetry.record('archive', 'ok', int((time.time() - t_start) * 1000), f'mid={mid}', trace)
 
             if not enabled or len((user_text or '').strip()) < min_chars:
+                telemetry.record('extract', 'skipped', 0, '太短或未启用', trace)
                 return
+            t_ex = time.time()
             items = extract(cfg, user_text, reply_text)
+            telemetry.record('extract', 'ok' if items else 'empty',
+                             int((time.time() - t_ex) * 1000), f'{len(items)} 条', trace)
             if not items:
                 return
-            write_back(cfg, items, f'airi:msg{mid or int(time.time())}', mid)
+            queued = write_back(cfg, items, f'airi:msg{mid or int(time.time())}', mid)
+            telemetry.record('enqueue', 'ok' if queued else 'blocked',
+                             int((time.time() - t_start) * 1000), f'{queued} 条', trace)
         except Exception as e:
             log(f'记忆任务异常: {e}')
 
@@ -431,6 +521,8 @@ def _ensure_extra_columns(db) -> None:
             ('retry_count', 'INTEGER DEFAULT 0'),
             ('next_retry_at', 'REAL'),
             ('last_error_at', 'REAL'),
+            ('attempts', 'INTEGER DEFAULT 0'),
+            ('verified_at', 'REAL'),
         ):
             if name not in cols:
                 con.execute(f'ALTER TABLE extractions ADD COLUMN {name} {decl}')

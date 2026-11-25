@@ -49,6 +49,19 @@
         </div>
       </div>
 
+      <div class="pipeline-box">
+        <div class="pipeline-head">
+          <strong>最近流水线</strong>
+          <span id="pipeline-fail"></span>
+        </div>
+        <ul class="pipeline-list" id="pipeline-list"></ul>
+      </div>
+
+      <div class="persona-warn" id="persona-warn" hidden>
+        <strong id="persona-warn-title">人格降级</strong>
+        <span id="persona-warn-text"></span>
+      </div>
+
       <div class="selftest-box">
         <div class="selftest-head">
           <strong>连通性自检</strong>
@@ -56,7 +69,6 @@
         </div>
         <div class="selftest-actions">
           <button class="btn primary" id="btn-selftest" type="button">开始自检</button>
-          <button class="btn" id="btn-cleanup-test" type="button">清理测试数据</button>
           <span id="selftest-status" class="field-hint"></span>
         </div>
         <ul class="selftest-steps" id="selftest-steps"></ul>

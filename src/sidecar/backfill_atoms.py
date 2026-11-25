@@ -102,4 +102,15 @@ async def backfill(dry_run: bool) -> None:
 
 
 if __name__ == '__main__':
+    if '--dry-run' not in sys.argv and '--maintenance' not in sys.argv:
+        print('直写插件数据库需显式加 --maintenance（建议先停止 AstrBot）')
+        sys.exit(2)
+    if '--maintenance' in sys.argv and '--dry-run' not in sys.argv:
+        import shutil
+        import time
+        from pathlib import Path as _P
+
+        dst = _P(str(DB_PATH) + '.bak_' + time.strftime('%Y%m%d%H%M%S'))
+        shutil.copy2(DB_PATH, dst)
+        print('已备份:', dst.name)
     asyncio.run(backfill('--dry-run' in sys.argv))

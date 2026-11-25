@@ -496,3 +496,61 @@ body {
 
 .selftest-steps li.ok { color: var(--ok); }
 .selftest-steps li.fail { color: var(--bad); }
+
+/* ---------- 人格降级提示 ---------- */
+.persona-warn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.persona-warn[hidden] { display: none; }
+.persona-warn.is-red {
+  border: 1px solid var(--bad);
+  background: rgba(255, 95, 109, 0.10);
+}
+.persona-warn.is-red strong { color: var(--bad); }
+.persona-warn.is-yellow {
+  border: 1px solid var(--warn);
+  background: rgba(255, 184, 77, 0.10);
+}
+.persona-warn.is-yellow strong { color: var(--warn); }
+.persona-warn strong { white-space: nowrap; }
+.persona-warn span { color: var(--text-dim); }
+
+
+/* ---------- 最近流水线 ---------- */
+.pipeline-box {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-card);
+  max-width: 860px;
+}
+
+.pipeline-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.pipeline-head span { font-size: 11.5px; color: var(--text-dim); }
+
+.pipeline-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  font: 11.5px/1.9 Consolas, monospace;
+  color: var(--text-dim);
+}
+
+.pipeline-list li.ok { color: var(--ok); }
+.pipeline-list li.bad { color: var(--bad); }

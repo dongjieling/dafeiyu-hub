@@ -44,5 +44,10 @@
     "top_k": 3,
     "timeout": 8,
     "cache_seconds": 60
+  },
+  "write_scope_check": "warn",
+  "maintenance_mode": false,
+  "outbox": {
+    "enabled": true
   }
 }

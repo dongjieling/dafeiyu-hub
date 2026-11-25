@@ -60,9 +60,16 @@ def build_blocks(ctx: dict) -> str:
 
 def build_messages(cfg: dict, payload: dict) -> list:
     messages = payload.get('messages') or []
-    text = persona.read_persona(cfg)
-    if not text:
-        return messages
+
+    # 人格四层兜底后永不为空；degraded 时显式记录，绝不静默返回原消息
+    snap = persona.snapshot(cfg)
+    text = snap.text
+    if snap.degraded:
+        log(f'人格降级: source={snap.source} stale={snap.stale} 原因={snap.error[:80]}')
+    if not text.strip():
+        # 理论上不会走到这里（builtin 常量非空），保留最后防线
+        log('人格四层兜底全部为空，使用内置常量')
+        text = persona.BUILTIN_PERSONA
 
     ctx = fetch_context(cfg, messages)
     if ctx['memories']:

@@ -116,11 +116,20 @@ class TestBuildMessages(unittest.TestCase):
         # 原 system 消息不应重复出现
         self.assertEqual(sum(1 for m in out if m.get('role') == 'system'), 2)  # 人格 + 记忆块
 
-    def test_no_persona_returns_original(self):
-        prompt.persona.read_persona = lambda cfg: ''
+    def test_persona_never_silently_missing(self):
+        """1a 起：人格四层兜底，绝不再静默返回原消息。"""
+        from persona import PersonaSnapshot
+
+        prompt.persona.snapshot = lambda cfg, force=False: PersonaSnapshot(
+            text=prompt.persona.BUILTIN_PERSONA, source='builtin', persona_id='dafeiyu',
+            sha256='x' * 64, chars=len(prompt.persona.BUILTIN_PERSONA),
+            ok=True, degraded=True,
+        )
         payload = {'messages': [{'role': 'user', 'content': 'hi'}]}
         out = prompt.build_messages(self.cfg, payload)
-        self.assertEqual(out, payload['messages'])
+        self.assertEqual(out[0]['role'], 'system')
+        self.assertIn('大肥鱼', out[0]['content'])
+        self.assertNotEqual(out, payload['messages'])
 
 
 if __name__ == '__main__':

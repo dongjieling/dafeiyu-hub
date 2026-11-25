@@ -16,6 +16,18 @@
                            └──────────────────┘
 ```
 
+## 兼容矩阵
+
+| 组件 | 已验证版本 |
+|---|---|
+| Windows | 10 / 11 |
+| Python | 3.12（AstrBot 自带） |
+| AstrBot | 4.29.4 |
+| LivingMemory | 2.14.2 |
+| Electron | 45.4.1 |
+
+启动时会做契约检查，不兼容会在状态页明确提示。
+
 ## 它解决什么问题
 
 | 没有中转站 | 有中转站 |
@@ -51,14 +63,14 @@
 
 | 文件 | 大小 | 链接 |
 |---|---|---|
-| `dafeiyu-hub-0.4.7-portable.exe` | 105.2 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v0.4.7/dafeiyu-hub-0.4.7-portable.exe) |
+| `dafeiyu-hub-1.0.0-portable.exe` | 105.2 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v1.0.0/dafeiyu-hub-1.0.0-portable.exe) |
 
 或在 [Releases 页面](https://github.com/dongjieling/dafeiyu-hub/releases) 选择版本下载。
 
 **放到普通目录**（如 `D:\大肥鱼中转站\`），不要放受限目录，双击运行。
 
 > ⚠️ 未签名 EXE，SmartScreen 可能提示「未知发布者」，选「更多信息 → 仍要运行」。
-> SHA256：`8837c0aa12e4e81daad754fa16d8d3783f48d8b0e33b9904272bb3eae651d6ef`
+> SHA256：`a474b31cd62345c76f2ca39f5fb2cdb3d621f9f3ae88a3559a39a343dafc6536`
 
 > ⚠️ 首次运行会提示配置 Python 路径与记忆库地址。
 
@@ -97,8 +109,8 @@ curl http://127.0.0.1:8787/health
 
 ## 版本
 
-当前版本 **v0.4.7**：连通性自检 + 一键清理测试数据。
-**下一版本 v1.0.0**（大版本，未开工）：契约层重构、outbox、E2E 测试、可观测、记忆质量。
+当前版本 **v1.0.0**：契约层重构、人格四层兜底、outbox、E2E 测试、可观测、记忆质量。
+当前版本 **v1.0.0**：契约层重构、人格四层兜底、outbox、E2E 测试、可观测、记忆质量。
 
 ## 文档
 
@@ -138,6 +150,14 @@ src/
 │   ├── hub.py          HTTP 服务：代理 + 人格 + 记忆
 │   └── config.example.json
 └── assets/             图标
+```
+
+## 开发
+
+```powershell
+cd src
+.
+un_tests.ps1        # 64 个用例
 ```
 
 ## 开发

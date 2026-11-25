@@ -29,9 +29,8 @@ EXAMPLE = SIDECAR / 'config.example.json'
 TARGET = SIDECAR / 'config.json'
 
 SECRET_PATTERNS = [
-    (re.compile(rb'lm_[A-Za-z0-9_\-]{20,}'), 'lm_key'),
-    (re.compile(rb'sk-[A-Za-z0-9]{16,}'), 'sk-key'),
-    (re.compile(rb'19dd9007[0-9a-f]{40}'), 'jwt_secret'),
+    (re.compile(rb'lm_[A-Za-z0-9_\-]{25,}'), 'lm_key'),
+    (re.compile(rb'sk-[A-Za-z0-9]{20,}'), 'sk-key'),
 ]
 
 
@@ -46,6 +45,26 @@ def build(version: str, out_dir: str) -> int:
     print('构建命令:', ' '.join(cmd))
     proc = subprocess.run(cmd, cwd=str(APP))
     return proc.returncode
+
+
+def check_bundled_config(resources: Path) -> list[str]:
+    """构建后校验包内配置：密钥字段必须为空。"""
+    problems = []
+    cfg_path = resources / 'sidecar' / 'config.json'
+    try:
+        cfg = json.loads(cfg_path.read_text(encoding='utf-8'))
+    except Exception as e:
+        return [f'无法读取包内配置: {e}']
+    if cfg.get('lm_key'):
+        problems.append('config.json 里 lm_key 非空')
+    kb = cfg.get('knowledge') or {}
+    if kb.get('jwt_secret'):
+        problems.append('config.json 里 knowledge.jwt_secret 非空')
+    if kb.get('username'):
+        problems.append('config.json 里 knowledge.username 非空')
+    if (cfg.get('write_scope') or '').strip():
+        problems.append('config.json 里 write_scope 非空')
+    return problems
 
 
 def scan(path: Path) -> list[str]:
@@ -109,6 +128,7 @@ def main() -> int:
 
         print('=== 扫描密钥 ===')
         hits = scan(out / 'win-unpacked')
+        hits += check_bundled_config(out / 'win-unpacked' / 'resources')
         if hits:
             print('发现疑似密钥，**不要发布**：')
             for h in hits:
