@@ -145,8 +145,41 @@ def clean_for_extract(text: str) -> str:
     s = re.sub(r'<\|ACT [^|]*\|>', '', s)
     s = re.sub(r'<\|DELAY \d+\|>', '', s)
     s = re.sub(r'- system:[\w\-\.]+', '', s)
+    # AIRI 会把系统指令拼进用户消息里，整段切掉
+    s = re.split(r'每次回复都要以\s*ACT', s)[0]
+    s = re.split(r'如果回复过程中情绪发生变化', s)[0]
     s = re.sub(r'\n{3,}', '\n\n', s)
     return s.strip()
+
+
+def parse_extract_json(text: str) -> list:
+    """把提炼返回的内容解析成列表：容错处理空内容、代码围栏、截断。
+
+    返回 [] 表示这次没有可用的提炼结果（调用方会记录日志）。
+    """
+    import re
+
+    if not text or not text.strip():
+        return []
+    cleaned = _strip_fence(text)
+    try:
+        data = json.loads(cleaned)
+        return data if isinstance(data, list) else []
+    except Exception:
+        pass
+    # 从第一个 [ 开始，尽量救出完整的对象
+    start = cleaned.find('[')
+    if start == -1:
+        return []
+    body = cleaned[start:]
+    for candidate in (body, body + ']', body[: body.rfind('}') + 1] + ']'):
+        try:
+            data = json.loads(candidate)
+            if isinstance(data, list):
+                return data
+        except Exception:
+            continue
+    return []
 
 
 def extract(cfg: dict, user_text: str, reply_text: str) -> list[dict]:
@@ -164,7 +197,7 @@ def extract(cfg: dict, user_text: str, reply_text: str) -> list[dict]:
             {'role': 'user', 'content': f'他说：{clean_for_extract(user_text)[:600]}\n她说：{clean_for_extract(reply_text)[:600]}'},
         ],
         'temperature': 0.1,
-        'max_tokens': 300,
+        'max_tokens': 700,
     }
     req = urllib.request.Request(
         up['base'].rstrip('/') + '/chat/completions',
@@ -177,8 +210,13 @@ def extract(cfg: dict, user_text: str, reply_text: str) -> list[dict]:
             req, timeout=float(ex.get('timeout') or 45), context=ssl.create_default_context()
         ) as r:
             data = json.loads(r.read().decode('utf-8', 'ignore'))
-        items = json.loads(_strip_fence(data['choices'][0]['message']['content']))
-        if not isinstance(items, list):
+        raw = (data.get('choices') or [{}])[0].get('message', {}).get('content') or ''
+        if not (raw or '').strip():
+            log('提炼返回空内容，跳过本轮')
+            return []
+        items = parse_extract_json(raw)
+        if not items:
+            log(f'提炼无可解析结果，返回片段: {raw[:60]!r}')
             return []
     except Exception as e:
         log(f'提炼失败: {str(e)[:100]}')

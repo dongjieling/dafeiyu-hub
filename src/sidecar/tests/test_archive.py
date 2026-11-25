@@ -1,11 +1,4 @@
-"""归档 / 加密 / 同步 冒烟测试。
-
-覆盖：
-- 新库建表是否含重试三列（P0-2）
-- 归档写入是否加密（P0-3）
-- 提炼记录是否加密 + message_id（P0-3）
-- QQ 同步是否真的能导入（P0-1 回归）
-"""
+"""归档 / 加密 / 同步 / 提炼解析 冒烟测试。"""
 
 import importlib
 import os
@@ -48,7 +41,6 @@ class ArchiveTest(unittest.TestCase):
         self.db = self.tmp / 'archive.db'
 
     def test_new_db_has_retry_columns(self):
-        """新库必须自带 retry_count / next_retry_at / last_error_at。"""
         con = sqlite3.connect(self.db)
         cols = {r[1] for r in con.execute('PRAGMA table_info(extractions)')}
         con.close()
@@ -66,7 +58,9 @@ class ArchiveTest(unittest.TestCase):
         item = {'content': '他打算明年换工作', 'importance': 0.6}
         self.memory.record_extraction(self.cfg, item, 'idem-1', 1, 'written', None, 42)
         con = sqlite3.connect(self.db)
-        row = con.execute('select content, message_id from extractions where idempotency_key=?', ("idem-1",)).fetchone()
+        row = con.execute(
+            'select content, message_id from extractions where idempotency_key=?', ('idem-1',)
+        ).fetchone()
         con.close()
         self.assertIsNotNone(row)
         self.assertTrue(row[0].startswith('enc:v1:'))
@@ -74,7 +68,6 @@ class ArchiveTest(unittest.TestCase):
         self.assertEqual(row[1], 42)
 
     def test_qq_sync_imports_one(self):
-        """假源库 → 同步一条 → 归档里应出现 1 条且加密。"""
         src = self.tmp / 'conversations.db'
         con = sqlite3.connect(src)
         con.execute(
@@ -82,7 +75,8 @@ class ArchiveTest(unittest.TestCase):
             'sender_id text, sender_name text, group_id text, platform text, timestamp real, metadata text)'
         )
         con.execute(
-            'insert into messages values (1, "qq:test", "user", "同步冒烟测试", "1", "tester", null, "aiocqhttp", 1700000000, "{}")'
+            'insert into messages values (1, "qq:test", "user", "同步冒烟测试", "1", "tester", null, '
+            '"aiocqhttp", 1700000000, "{}")'
         )
         con.commit()
         con.close()
@@ -97,6 +91,38 @@ class ArchiveTest(unittest.TestCase):
         con.close()
         self.assertTrue(row.startswith('enc:v1:'), row[:20])
         self.assertEqual(self.crypto.decrypt(row), '同步冒烟测试')
+
+
+class ExtractParseTest(unittest.TestCase):
+    """提炼结果解析（v0.4.6 回归点：空内容、代码围栏、截断）。"""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix='hub_parse_'))
+        self.config, self.memory, self.sync, self.crypto = fresh_env(self.tmp)
+
+    def test_plain_json(self):
+        text = '[{"content":"他今晚有课","importance":0.6,"topics":["学习"]}]'
+        self.assertEqual(len(self.memory.parse_extract_json(text)), 1)
+
+    def test_fenced_json(self):
+        text = '```json\n[{"content":"他今晚有课","importance":0.6}]\n```'
+        self.assertEqual(len(self.memory.parse_extract_json(text)), 1)
+
+    def test_empty(self):
+        self.assertEqual(self.memory.parse_extract_json(''), [])
+        self.assertEqual(self.memory.parse_extract_json('   '), [])
+
+    def test_truncated(self):
+        text = '[{"content":"他今晚有课","importance":0.6,"topics":["学习","课程"]}'
+        self.assertEqual(len(self.memory.parse_extract_json(text)), 1)
+
+    def test_prose_with_array(self):
+        text = '好的，提取如下：\n[{"content":"他压力大","importance":0.7}]\n以上。'
+        self.assertEqual(len(self.memory.parse_extract_json(text)), 1)
+
+    def test_clean_strips_act_instruction(self):
+        raw = '记住一条消息，今天晚上有课\n\n每次回复都要以 ACT token 开头，用来表示初始情绪'
+        self.assertEqual(self.memory.clean_for_extract(raw), '记住一条消息，今天晚上有课')
 
 
 if __name__ == '__main__':
