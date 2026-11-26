@@ -76,13 +76,19 @@ class PatchHashTest(unittest.TestCase):
         self.assertEqual(st.state, 'anchor_mismatch')
         self.assertFalse(st.can_auto_apply)
 
-    def test_known_anchor_unpatched(self):
-        # 用真实哈希对应的锚点行
-        self.file.write_text(
-            'def add():\n    metadata["key_facts"] = key_facts\n', encoding='utf-8')
+    def test_known_anchor_hash_matches_constant(self):
+        import hashlib
+
+        anchor = '    metadata["key_facts"] = key_facts'
+        expected = hashlib.sha256(anchor.strip().encode('utf-8')).hexdigest()[:16]
+        self.assertEqual(self.patch.KNOWN_VERSIONS.get('2.14.2'), expected)
+
+    def test_exact_anchor_is_unpatched(self):
+        anchor = '    metadata["key_facts"] = key_facts'
+        self.file.write_text(f'def add():\n{anchor}\n', encoding='utf-8')
         st = self._status()
-        # 只有当真实哈希正好等于这条文本时才 unpatched；否则 anchor_mismatch
-        self.assertIn(st.state, ('unpatched', 'anchor_mismatch'))
+        self.assertEqual(st.state, 'unpatched')
+        self.assertTrue(st.can_auto_apply)
 
 
 class TopicsTest(unittest.TestCase):
@@ -165,7 +171,7 @@ class MigrationTest(unittest.TestCase):
         con.commit()
         con.close()
 
-        with mock.patch.object(self.migrations.shutil, 'copy2', side_effect=OSError('disk full')):
+        with mock.patch.object(self.migrations, 'backup_database', side_effect=OSError('disk full')):
             res = self.migrations.ensure_archive(db)
         self.assertFalse(res.ok)
         self.assertIn('备份失败', res.error)

@@ -17,7 +17,7 @@ from pathlib import Path
 
 from util import log
 
-ARCHIVE_SCHEMA_VERSION = 1
+ARCHIVE_SCHEMA_VERSION = 2
 
 
 class IncompatibleArchive(Exception):
@@ -81,6 +81,17 @@ def _set_version(con: sqlite3.Connection, version: int) -> None:
     con.execute(f'PRAGMA user_version = {int(version)}')
 
 
+def backup_database(db: Path, dest: Path) -> None:
+    """WAL 安全备份：使用 SQLite backup API。"""
+    src = sqlite3.connect(db, timeout=20)
+    dst = sqlite3.connect(dest)
+    try:
+        src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+
+
 def ensure_archive(db: Path, backup: bool = True) -> MigrationResult:
     """确保归档库结构与代码版本一致。"""
     if not db.exists():
@@ -99,7 +110,7 @@ def ensure_archive(db: Path, backup: bool = True) -> MigrationResult:
     if backup:
         backup_path = f'{db}.bak_{time.strftime("%Y%m%d%H%M%S")}'
         try:
-            shutil.copy2(db, backup_path)
+            backup_database(db, Path(backup_path))
         except Exception as e:
             log(f'迁移前备份失败，终止迁移: {e}')
             return MigrationResult(False, _user_version(sqlite3.connect(db)), [], '', f'备份失败: {e}')
@@ -114,10 +125,12 @@ def ensure_archive(db: Path, backup: bool = True) -> MigrationResult:
             )
 
         applied = []
-        if version == 0:
-            # 老库（v0.4.x）：补建缺失结构 + 补齐新增列 + 打版本
-            con.executescript(BASE_SCHEMA)
-            cols = {r[1] for r in con.execute('PRAGMA table_info(extractions)')}
+
+        def columns() -> set:
+            return {r[1] for r in con.execute('PRAGMA table_info(extractions)')}
+
+        def add_columns() -> None:
+            cols = columns()
             for name, decl in (
                 ('retry_count', 'INTEGER DEFAULT 0'),
                 ('next_retry_at', 'REAL'),
@@ -128,8 +141,26 @@ def ensure_archive(db: Path, backup: bool = True) -> MigrationResult:
             ):
                 if name not in cols:
                     con.execute(f'ALTER TABLE extractions ADD COLUMN {name} {decl}')
+
+        if version == 0:
+            con.executescript(BASE_SCHEMA)
+            add_columns()
+            applied.append('baseline-0-to-2')
+
+        if version < 2:
+            add_columns()
+            # 历史遗留的 index_unconfirmed 归为 legacy_unconfirmed，不污染新指标
+            moved = con.execute(
+                "UPDATE extractions SET status='legacy_unconfirmed' "
+                "WHERE status='index_unconfirmed' AND created_at < ?",
+                (time.time() - 3600,),
+            ).rowcount
+            if moved:
+                log(f'历史未确认记录已归档: {moved} 条')
+                applied.append(f'legacy-unconfirmed-{moved}')
             _set_version(con, ARCHIVE_SCHEMA_VERSION)
-            applied.append('baseline-0-to-1')
+            applied.append(f'upgrade-{version}-to-{ARCHIVE_SCHEMA_VERSION}')
+
         con.commit()
         return MigrationResult(True, ARCHIVE_SCHEMA_VERSION, applied, backup_path)
     except IncompatibleArchive as e:

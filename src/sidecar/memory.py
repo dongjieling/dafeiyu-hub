@@ -303,7 +303,10 @@ def write_back(cfg: dict, items: list[dict], seed: str, message_id: int | None =
     kept = []
     for idx, item in enumerate(items):
         if quality.is_duplicate(cfg, item['content'], existing):
-            log(f"重复记忆已跳过: {item['content'][:30]}")
+            if _log_content(cfg):
+                log(f"重复记忆已跳过: {item['content'][:30]}")
+            else:
+                log(f"重复记忆已跳过（{len(item['content'])}字，内容不记录）")
             record_extraction(cfg, item, f'{seed}#{idx}', None, 'duplicate', '与已有记忆高度相似', message_id)
             continue
         kept.append((idx, item))

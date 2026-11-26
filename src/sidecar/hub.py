@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 import ssl
 import threading
 import time
@@ -100,20 +101,19 @@ def refresh_compat(auto_patch: bool = True, startup_checks: bool = False,
     from contracts import CompatReport
 
     report = CompatReport()
-    try:
-        report.add(AstrBotAdapter(CFG).probe_persona())
-    except Exception as e:
-        log(f'契约检查异常（persona）: {e}')
 
-    try:
-        report.add(LivingMemoryAdapter(CFG).probe())
-    except Exception as e:
-        log(f'契约检查异常（LM）: {e}')
+    def probe(name: str, fn) -> None:
+        from contracts import ContractResult, Severity
 
-    try:
-        report.add(scope.validate(CFG))
-    except Exception as e:
-        log(f'契约检查异常（scope）: {e}')
+        try:
+            report.add(fn())
+        except Exception as e:
+            log(f'契约检查异常（{name}）: {e}')
+            report.add(ContractResult(name, False, Severity.DEGRADED, detail=str(e)[:80]))
+
+    probe('astrbot.persona', lambda: AstrBotAdapter(CFG).probe_persona())
+    probe('livingmemory.api', lambda: LivingMemoryAdapter(CFG).probe())
+    probe('astrbot.write_scope', lambda: scope.validate(CFG))
 
     try:
         report.add(patch_manager.probe(auto_apply=auto_patch and patch_manager.AUTO_APPLY_DEFAULT))
@@ -218,6 +218,14 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------------- POST ----------------
     def do_POST(self):
+        if self.path in ('/v1/patch/status', '/patch/status'):
+            self._json(200, asdict(patch_manager.status()))
+            return
+
+        if self.path in ('/v1/patch/apply', '/patch/apply'):
+            self._json(200, asdict(patch_manager.apply()))
+            return
+
         if self.path in ('/v1/selftest', '/selftest'):
             self._handle_selftest()
             return

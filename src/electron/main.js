@@ -349,7 +349,6 @@ ipcMain.handle('hub:appInfo', () => ({
 
 // ---------- 参数调整 ----------
 const plug = require('./plugins');
-const atomPatch = require('./atomPatch');
 
 ipcMain.handle('params:plugins', () => plug.listPlugins());
 ipcMain.handle('params:pluginGet', (_e, key) => plug.getPluginConfig(key));
@@ -480,17 +479,17 @@ ipcMain.handle('archive:exportKey', async () => {
   });
 });
 
-ipcMain.handle('patch:status', () => atomPatch.patchStatus());
+ipcMain.handle('patch:status', () => sidecarPost('/v1/patch/status'));
 ipcMain.handle('patch:apply', async () => {
-  const res = atomPatch.applyPatch();
-  log(res.ok ? '记忆原子补丁已重新打上' : '补丁失败: ' + (res.hint || res.state));
-  if (res.ok && res.state === 'patched') {
-    // 补丁只改了磁盘文件，AstrBot 进程里还是旧模块，需要重载插件才生效
+  // 统一走 sidecar 的 patch_manager：版本 + 锚点哈希门都在那边
+  const res = await sidecarPost('/v1/patch/apply');
+  log(res && res.state === 'ok' ? '记忆原子补丁已重新打上' : `补丁未应用: ${(res && res.detail) || '未知'}`);
+  if (res && res.state === 'ok') {
     const reload = await plug.reloadPlugin('livingmemory');
     log(reload.ok ? '插件已重载，补丁生效' : '插件重载失败：重启 AstrBot 后生效');
-    return { ...res, reloaded: reload.ok };
+    return { ...res, ok: true, reloaded: reload.ok };
   }
-  return res;
+  return { ...res, ok: false };
 });
 
 
@@ -505,9 +504,8 @@ if (!gotLock) {
     config = loadConfig();
     createWindow();
     createTray();
-    const ps = atomPatch.patchStatus();
-    if (ps.state === 'patched') log('记忆原子补丁: 正常');
-    else log('记忆原子补丁: ' + (ps.hint || ps.state));
+    // 补丁状态由 sidecar 的契约监控负责上报，这里只提示一次
+    log('记忆原子补丁: 交给 sidecar 契约监控检查');
     if (config.autoStartSidecar) {
       startSidecar();
     }

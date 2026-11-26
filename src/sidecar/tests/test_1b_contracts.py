@@ -39,7 +39,7 @@ class MigrationTest(unittest.TestCase):
         res = self.migrations.ensure_archive(db)
         self.assertTrue(res.ok, res)
         con = sqlite3.connect(db)
-        self.assertEqual(con.execute('PRAGMA user_version').fetchone()[0], 1)
+        self.assertEqual(con.execute('PRAGMA user_version').fetchone()[0], 2)
         tables = {r[0] for r in con.execute("select name from sqlite_master where type='table'")}
         con.close()
         self.assertTrue({'sessions', 'messages', 'extractions', 'kv'} <= tables)
@@ -69,7 +69,7 @@ class MigrationTest(unittest.TestCase):
         cols = {r[1] for r in con.execute('PRAGMA table_info(extractions)')}
         version = con.execute('PRAGMA user_version').fetchone()[0]
         con.close()
-        self.assertEqual(version, 1)
+        self.assertEqual(version, 2)
         self.assertTrue({'retry_count', 'next_retry_at', 'last_error_at'} <= cols)
 
     def test_idempotent(self):
