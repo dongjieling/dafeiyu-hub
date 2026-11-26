@@ -63,12 +63,20 @@ function setDot(el, kind) {
 function render() {
   const { running, health } = state;
 
+  if (running && !state.runningSince) state.runningSince = Date.now();
+  if (!running) state.runningSince = null;
+
   // 英雄区
   const heroDot = $('#hero-dot');
   if (running && health?.ok) {
     setDot(heroDot, 'on');
     $('#hero-title').textContent = '服务运行中';
     $('#hero-sub').textContent = 'AIRI 可以连接了';
+  } else if (running && state.runningSince && Date.now() - state.runningSince < 15000) {
+    // 刚启动的 15 秒内不吓人：sidecar 起进程需要时间
+    setDot(heroDot, 'warn');
+    $('#hero-title').textContent = '正在启动服务…';
+    $('#hero-sub').textContent = '等待本地服务响应';
   } else if (running) {
     setDot(heroDot, 'warn');
     $('#hero-title').textContent = '服务已启动，但未响应';
@@ -78,6 +86,19 @@ function render() {
     $('#hero-title').textContent = '服务未启动';
     $('#hero-sub').textContent = '点击「启动服务」开始';
   }
+  document.body.dataset.state = !running ? 'off' : health?.ok ? 'on' : 'warn';
+
+  // 按钮状态：运行中不允许重复启动，未运行不允许停止
+  const startBtn = document.getElementById('btn-start');
+  const stopBtn = document.getElementById('btn-stop');
+  if (startBtn) startBtn.disabled = Boolean(running);
+  if (stopBtn) stopBtn.disabled = !running;
+
+  // 英雄区摘要
+  const portEl = document.getElementById('hero-port');
+  if (portEl) portEl.textContent = String(state.cfg?.hubPort ?? 8787);
+  const hv = document.getElementById('hero-version');
+  if (hv) hv.textContent = 'v' + (health?.ok ? health.data.version || '—' : state.appVersion || '—');
 
   // 三个灯
   setDot($('#light-server .dot'), running && health?.ok ? 'on' : running ? 'warn' : 'off');
@@ -99,7 +120,7 @@ function render() {
     ? `${health.data.persona_chars ?? 0} 字${health.data.persona_id ? `（${health.data.persona_id}）` : ''}`
     : '—';
   $('#val-model').textContent = health?.ok ? health.data.upstream_model || '—' : '—';
-  $('#val-python').textContent = state.cfg?.pythonPath || '—';
+  $('#val-python').textContent = state.cfg?.pythonPath || '自动检测（AstrBot 内置）';
   const verEl = $('#val-version');
   if (verEl) verEl.textContent = health?.ok ? 'v' + (health.data.version || '—') : '—';
 
@@ -122,6 +143,8 @@ function render() {
         : '';
       failEl.style.color = p.last_failure ? 'var(--bad)' : '';
     }
+    const advPipe = document.getElementById('adv-pipeline');
+    if (advPipe && p.last_failure) advPipe.open = true;
   }
 
   // 人格降级提示
@@ -197,6 +220,8 @@ function renderSelftest(res) {
     list.appendChild(li);
   }
   if (status) status.textContent = res.ok ? '全部通过' : '有步骤未通过';
+  const adv = document.getElementById('adv-selftest');
+  if (adv && !res.ok) adv.open = true;
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -235,6 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // sidecar 用 state='ok' 表示补丁在位；旧 JS 用过 'patched'，两者都算健康
 const PATCH_HEALTHY = new Set(['ok', 'patched']);
 const PATCH_IRRELEVANT = new Set(['no_plugin', 'missing']);
+const PATCH_WARN = new Set(['unpatched', 'anchor_mismatch', 'anchor_missing', 'unknown_version']);
 
 function patchStateText(st) {
   const labels = {
@@ -251,9 +277,15 @@ async function refreshPatch() {
     const st = await window.hub.patchStatus();
     const box = document.getElementById('patch-warn');
     if (!box) return;
+    // sidecar 还没起来 / 请求失败时不要误报「补丁异常」
+    if (!st || !st.state || st.error) {
+      box.hidden = true;
+      return;
+    }
     const healthy = PATCH_HEALTHY.has(st.state) || PATCH_IRRELEVANT.has(st.state);
-    box.hidden = healthy;
-    if (!healthy) {
+    // 未知状态也先不报警，只有明确的问题态才提示
+    box.hidden = healthy || !PATCH_WARN.has(st.state);
+    if (!box.hidden) {
       const title = box.querySelector('strong');
       const txt = document.getElementById('patch-warn-text');
       if (title) title.textContent = patchStateText(st);
@@ -313,6 +345,13 @@ function appendLog(line) {
 window.hub.onLog(appendLog);
 window.hub.onState(() => refresh());
 
+// 前端自身出错也要看得见
+window.addEventListener('error', (e) => appendLog('[ui!] ' + (e.message || e.error || 'unknown')));
+window.addEventListener('unhandledrejection', (e) => {
+  const r = e.reason;
+  appendLog('[ui!] ' + ((r && (r.message || r.stack)) || String(r)));
+});
+
 // ---------- 按钮 ----------
 $('#btn-start').addEventListener('click', async () => {
   $('#btn-start').disabled = true;
@@ -357,6 +396,15 @@ $('#btn-save').addEventListener('click', async () => {
 });
 
 // ---------- 初始化 ----------
+// 窗口隐藏时降频，避免无意义轮询；先启动，避免初始化异常把轮询一起带走
+setInterval(() => {
+  if (!document.hidden) refresh().catch((e) => appendLog('[ui!] 刷新失败: ' + e.message));
+}, 8000);
+
+setInterval(() => {
+  if (!document.hidden) refreshPatch();
+}, 60000);
+
 (async () => {
   try {
     const info = await window.hub.appInfo();
@@ -366,11 +414,11 @@ $('#btn-save').addEventListener('click', async () => {
   } catch {
     /* 忽略 */
   }
-  await loadConfig();
-  await refresh();
-  await refreshPatch();
-  // 窗口隐藏时降频，避免无意义轮询
-  setInterval(() => {
-    if (!document.hidden) refresh();
-  }, 8000);
+  try {
+    await loadConfig();
+    await refresh();
+    await refreshPatch();
+  } catch (e) {
+    appendLog('[ui!] 初始化失败: ' + (e && e.message));
+  }
 })();

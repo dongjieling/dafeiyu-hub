@@ -10,6 +10,7 @@
   <aside class="sidebar">
     <div class="brand">
       <span class="brand-name">大肥鱼中转站</span>
+      <span class="brand-sub">memory hub</span>
     </div>
 
     <nav class="nav">
@@ -17,7 +18,7 @@
       <button class="nav-item" data-page="params">参数</button>
       <button class="nav-item" data-page="config">配置</button>
       <button class="nav-item" data-page="logs">日志</button>
-      <button class="nav-item disabled" data-page="memory" disabled>记忆<span class="badge">v0.4</span></button>
+      <button class="nav-item disabled" data-page="memory" disabled>记忆<span class="badge">后续</span></button>
       <button class="nav-item" data-page="about">关于</button>
     </nav>
 
@@ -33,7 +34,10 @@
     <!-- 状态页 -->
     <section class="page active" id="page-status">
       <header class="page-head">
-        <h1>状态</h1>
+        <div>
+          <h1>状态</h1>
+          <p class="page-sub">本地服务、记忆链路与运行数据</p>
+        </div>
         <div class="actions">
           <button class="btn primary" id="btn-start">启动服务</button>
           <button class="btn" id="btn-stop">停止服务</button>
@@ -41,43 +45,43 @@
         </div>
       </header>
 
-      <div class="status-hero">
+      <div class="hero" id="hero">
         <div class="dot" id="hero-dot"></div>
-        <div>
+        <div class="hero-text">
           <div class="hero-title" id="hero-title">服务未启动</div>
           <div class="hero-sub" id="hero-sub">点击「启动服务」开始</div>
         </div>
-      </div>
-
-      <div class="pipeline-box">
-        <div class="pipeline-head">
-          <strong>最近流水线</strong>
-          <span id="pipeline-fail"></span>
+        <div class="hero-meta">
+          <div class="hero-meta-item">
+            <span>端口</span>
+            <strong id="hero-port">—</strong>
+          </div>
+          <div class="hero-meta-item">
+            <span>版本</span>
+            <strong id="hero-version">—</strong>
+          </div>
         </div>
-        <ul class="pipeline-list" id="pipeline-list"></ul>
       </div>
 
-      <div class="persona-warn" id="persona-warn" hidden>
-        <strong id="persona-warn-title">人格降级</strong>
-        <span id="persona-warn-text"></span>
-      </div>
-
-      <div class="selftest-box">
-        <div class="selftest-head">
-          <strong>连通性自检</strong>
-          <span>写入一条测试记忆，验证「配置 → 记忆库 → 写入 → 检索 → 知识库」是否全通</span>
+      <div class="alerts" id="alerts">
+        <div class="alert red" id="persona-warn" hidden>
+          <div class="alert-body">
+            <strong id="persona-warn-title">人格降级</strong>
+            <span id="persona-warn-text"></span>
+          </div>
         </div>
-        <div class="selftest-actions">
-          <button class="btn primary" id="btn-selftest" type="button">开始自检</button>
-          <span id="selftest-status" class="field-hint"></span>
+
+        <div class="alert amber" id="patch-warn" hidden>
+          <div class="alert-body">
+            <strong>记忆原子补丁缺失</strong>
+            <span id="patch-warn-text">插件升级后补丁会丢失，桌宠写的记忆不会生成原子，QQ 侧召回会变差。</span>
+          </div>
+          <button class="btn primary" id="btn-patch-fix">立即修复</button>
         </div>
-        <ul class="selftest-steps" id="selftest-steps"></ul>
       </div>
 
-      <div class="patch-warn" id="patch-warn" hidden>
-        <strong>记忆原子补丁缺失</strong>
-        <span id="patch-warn-text">插件升级后补丁会丢失，桌宠写的记忆不会生成原子，QQ 侧召回会变差。</span>
-        <button class="btn primary" id="btn-patch-fix">立即修复</button>
+      <div class="section-title">
+        <h2>三个关键连接</h2>
       </div>
 
       <div class="lights">
@@ -93,6 +97,10 @@
           <div class="light-head"><span class="dot"></span><strong>上游模型</strong></div>
           <div class="light-body">DeepSeek</div>
         </div>
+      </div>
+
+      <div class="section-title">
+        <h2>运行数据</h2>
       </div>
 
       <div class="cards">
@@ -126,6 +134,34 @@
         </div>
       </div>
 
+      <div class="section-title">
+        <h2>诊断工具</h2>
+      </div>
+
+      <details class="panel" id="adv-selftest">
+        <summary>
+          <span>连通性自检</span>
+          <em>写入一条测试记忆，验证配置 → 记忆库 → 写入 → 检索 → 知识库</em>
+        </summary>
+        <div class="panel-body">
+          <div class="actions">
+            <button class="btn primary" id="btn-selftest" type="button">开始自检</button>
+            <span id="selftest-status" class="field-hint"></span>
+          </div>
+          <ul class="selftest-steps" id="selftest-steps"></ul>
+        </div>
+      </details>
+
+      <details class="panel" id="adv-pipeline">
+        <summary>
+          <span>最近流水线</span>
+          <em id="pipeline-fail">成功时不会显示内容</em>
+        </summary>
+        <div class="panel-body">
+          <ul class="pipeline-list" id="pipeline-list"></ul>
+        </div>
+      </details>
+
       <div class="hint">
         <strong>在 AIRI 里接入：</strong>
         设置 → 服务来源 → 聊天 → OpenAI 兼容，Base URL 填
@@ -137,7 +173,10 @@
     <!-- 参数页 -->
     <section class="page" id="page-params">
       <header class="page-head">
-        <h1>参数</h1>
+        <div>
+          <h1>参数</h1>
+          <p class="page-sub">调整记忆读写行为与 AstrBot 插件设置</p>
+        </div>
         <div class="actions">
           <button class="btn ghost" id="btn-params-reload">重新检测</button>
         </div>
@@ -156,7 +195,10 @@
     <!-- 配置页 -->
     <section class="page" id="page-config">
       <header class="page-head">
-        <h1>配置</h1>
+        <div>
+          <h1>配置</h1>
+          <p class="page-sub">启动相关设置与数据位置</p>
+        </div>
         <div class="actions">
           <button class="btn primary" id="btn-save">保存</button>
           <button class="btn ghost" id="btn-open-logs">打开数据目录</button>
@@ -182,9 +224,9 @@
         </label>
       </div>
 
-            <div class="actions" style="margin-bottom:14px">
+      <div class="actions" style="margin: 4px 0 16px">
         <button class="btn" id="btn-export-key" type="button">导出归档密钥</button>
-        <span class="field-hint" style="align-self:center">换电脑 / 重装系统前必须导出，否则加密的归档解不开</span>
+        <span class="field-hint">换电脑 / 重装系统前必须导出，否则加密的归档解不开</span>
       </div>
 
       <div class="hint">
@@ -196,7 +238,10 @@
     <!-- 日志页 -->
     <section class="page" id="page-logs">
       <header class="page-head">
-        <h1>日志</h1>
+        <div>
+          <h1>日志</h1>
+          <p class="page-sub">实时输出，失败行标红</p>
+        </div>
         <div class="actions">
           <button class="btn ghost" id="btn-clear">清空</button>
         </div>
@@ -207,7 +252,10 @@
     <!-- 关于页 -->
     <section class="page" id="page-about">
       <header class="page-head">
-        <h1>关于</h1>
+        <div>
+          <h1>关于</h1>
+          <p class="page-sub">它做什么、怎么做的、以后做什么</p>
+        </div>
       </header>
 
       <div class="about-block">
@@ -246,8 +294,9 @@
         <p><span class="about-ver" id="about-version">v—</span> · 服务端 <span id="about-sidecar">—</span></p>
         <ul class="about-list">
           <li>人格注入、记忆召回、记忆写回、原文归档</li>
-          <li>知识库检索（可选）</li>
-          <li>进程守护：服务崩溃自动重启</li>
+          <li>人格四层兜底：数据库 → 缓存 → 精简版 → 内置</li>
+          <li>写入队列：崩溃重启自动补写</li>
+          <li>知识库检索、参数调整、连通性自检</li>
           <li>深色 / 浅色主题</li>
         </ul>
       </div>
@@ -255,9 +304,9 @@
       <div class="about-block">
         <h2>接下来</h2>
         <ul class="about-list">
-          <li><strong>v0.3</strong> 插件参数调整、界面重做</li>
-          <li><strong>v0.4</strong> 记忆浏览与编辑、记忆互通适配层</li>
-          <li><strong>v1.0</strong> 多协议端支持（NapCat / Lagrange / LLOneBot）</li>
+          <li><strong>v1.1</strong> 记忆浏览与编辑、隐私白名单</li>
+          <li><strong>v1.2</strong> MCP 输出（让其他 AI 工具读同一份记忆）</li>
+          <li><strong>v2.0</strong> 多协议端支持（NapCat / Lagrange / LLOneBot）</li>
         </ul>
       </div>
 
@@ -267,7 +316,7 @@
           <li>AstrBot — 机器人框架（AGPL-3.0）</li>
           <li>LivingMemory — 记忆引擎（AGPL-3.0）</li>
           <li>AIRI — 桌面宠物（MIT）</li>
-          <li>本项目仅通过公开接口调用上述组件，未包含其代码</li>
+          <li>本项目仅通过公开接口调用上述组件；原子的生成需要给插件打一个可选补丁</li>
         </ul>
       </div>
     </section>
