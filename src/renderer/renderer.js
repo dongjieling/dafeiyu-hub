@@ -232,17 +232,32 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ---------- 记忆原子补丁 ----------
+// sidecar 用 state='ok' 表示补丁在位；旧 JS 用过 'patched'，两者都算健康
+const PATCH_HEALTHY = new Set(['ok', 'patched']);
+const PATCH_IRRELEVANT = new Set(['no_plugin', 'missing']);
+
+function patchStateText(st) {
+  const labels = {
+    unpatched: '记忆原子补丁缺失',
+    anchor_mismatch: '插件结构已变，补丁需人工确认',
+    anchor_missing: '插件结构已变，找不到补丁锚点',
+    unknown_version: '插件版本不在已知列表，需人工确认',
+  };
+  return labels[st.state] || '记忆原子补丁异常';
+}
+
 async function refreshPatch() {
   try {
     const st = await window.hub.patchStatus();
     const box = document.getElementById('patch-warn');
     if (!box) return;
-    if (st.state === 'patched' || st.state === 'missing') {
-      box.hidden = true;
-    } else {
-      box.hidden = false;
+    const healthy = PATCH_HEALTHY.has(st.state) || PATCH_IRRELEVANT.has(st.state);
+    box.hidden = healthy;
+    if (!healthy) {
+      const title = box.querySelector('strong');
       const txt = document.getElementById('patch-warn-text');
-      if (txt) txt.textContent = st.hint || '补丁缺失，桌宠写的记忆不会生成原子。';
+      if (title) title.textContent = patchStateText(st);
+      if (txt) txt.textContent = st.detail || '桌宠写的记忆不会生成原子，QQ 侧召回会变差。';
     }
   } catch {
     /* 忽略 */
@@ -253,9 +268,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const btn = document.getElementById('btn-patch-fix');
   if (btn) {
     btn.addEventListener('click', async () => {
-      const res = await window.hub.patchApply();
-      appendLog(res.ok ? '记忆原子补丁已修复' : '修复失败: ' + (res.hint || res.state));
-      await refreshPatch();
+      btn.disabled = true;
+      try {
+        const res = await window.hub.patchApply();
+        if (res && res.ok) {
+          appendLog('记忆原子补丁已修复（插件已重载）');
+        } else {
+          appendLog('修复失败: ' + ((res && (res.detail || res.state)) || '未知原因'));
+        }
+        await refreshPatch();
+      } finally {
+        btn.disabled = false;
+      }
     });
   }
 });
