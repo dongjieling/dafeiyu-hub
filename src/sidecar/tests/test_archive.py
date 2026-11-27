@@ -75,7 +75,7 @@ class ArchiveTest(unittest.TestCase):
             'sender_id text, sender_name text, group_id text, platform text, timestamp real, metadata text)'
         )
         con.execute(
-            'insert into messages values (1, "qq:test", "user", "同步冒烟测试", "1", "tester", null, '
+            'insert into messages values (1, "一号:FriendMessage:1", "user", "同步冒烟测试", "1", "tester", null, '
             '"aiocqhttp", 1700000000, "{}")'
         )
         con.commit()

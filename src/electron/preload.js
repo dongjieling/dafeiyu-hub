@@ -18,6 +18,10 @@ contextBridge.exposeInMainWorld('hub', {
   patchStatus: () => ipcRenderer.invoke('patch:status'),
   exportArchiveKey: () => ipcRenderer.invoke('archive:exportKey'),
   selftest: () => ipcRenderer.invoke('selftest:run'),
+  memories: (params) => ipcRenderer.invoke('memory:list', params),
+  memoryDelete: (id) => ipcRenderer.invoke('memory:delete', id),
+  archiveConfig: () => ipcRenderer.invoke('config:archiveGet'),
+  setArchiveConfig: (patch) => ipcRenderer.invoke('config:archiveSet', patch),
   cleanupTestData: () => ipcRenderer.invoke('selftest:cleanup'),
   patchApply: () => ipcRenderer.invoke('patch:apply'),
 

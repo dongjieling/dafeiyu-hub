@@ -445,6 +445,79 @@ function sidecarPost(pathname) {
   });
 }
 
+
+function sidecarGet(pathname) {
+  return new Promise((resolve) => {
+    const req = http.get(
+      { host: '127.0.0.1', port: config.hubPort || 8787, path: pathname, timeout: 20000 },
+      (res) => {
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (c) => (body += c));
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(body));
+          } catch {
+            resolve({ ok: false, error: body.slice(0, 200) });
+          }
+        });
+      }
+    );
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ ok: false, error: '超时' });
+    });
+    req.on('error', (e) => resolve({ ok: false, error: e.message }));
+  });
+}
+
+function sidecarPostJson(pathname, payload) {
+  return new Promise((resolve) => {
+    const data = JSON.stringify(payload || {});
+    const req = require('node:http').request(
+      {
+        host: '127.0.0.1',
+        port: config.hubPort || 8787,
+        path: pathname,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+        timeout: 60000,
+      },
+      (res) => {
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (c) => (body += c));
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(body));
+          } catch {
+            resolve({ ok: false, error: body.slice(0, 200) });
+          }
+        });
+      }
+    );
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ ok: false, error: '超时' });
+    });
+    req.on('error', (e) => resolve({ ok: false, error: e.message }));
+    req.end(data);
+  });
+}
+
+ipcMain.handle('memory:list', (_e, params) => {
+  const q = new URLSearchParams({
+    query: (params && params.query) || '',
+    limit: String((params && params.limit) || 30),
+    offset: String((params && params.offset) || 0),
+    include_selftest: (params && params.include_selftest) ? '1' : '0',
+  });
+  return sidecarGet('/v1/memories?' + q.toString());
+});
+ipcMain.handle('memory:delete', (_e, id) => sidecarPostJson('/v1/memories/delete', { id }));
+ipcMain.handle('config:archiveGet', () => sidecarGet('/v1/config/archive'));
+ipcMain.handle('config:archiveSet', (_e, patch) => sidecarPostJson('/v1/config/archive', patch));
+
 ipcMain.handle('selftest:run', () => sidecarPost('/v1/selftest'));
 ipcMain.handle('selftest:cleanup', () => sidecarPost('/v1/selftest/cleanup'));
 

@@ -110,7 +110,9 @@ class OutboxTest(unittest.TestCase):
         con.commit()
         con.close()
         self.outbox.verify_index(self.cfg)
-        self.assertEqual(self._row('k1')['status'], 'verified')
+        row = self._row('k1')
+        self.assertEqual(row['status'], 'written')
+        self.assertIsNotNone(row['verified_at'])
 
     def test_failure_backoff_then_dead(self):
         _FakeLM.fail = True

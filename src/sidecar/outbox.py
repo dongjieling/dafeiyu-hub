@@ -210,8 +210,9 @@ def verify_index(cfg: dict, limit: int = 5) -> int:
                 quality.similar(plain, str(it.get('content') or '')) >= 0.8 for it in items
             )
             if hit:
+                # 状态保持 written，成功检索用 verified_at 记录
                 con.execute(
-                    "UPDATE extractions SET status='verified', verified_at=? WHERE id=?",
+                    'UPDATE extractions SET verified_at=?, attempts=0 WHERE id=?',
                     (time.time(), row['id']),
                 )
             else:
@@ -278,7 +279,14 @@ def stats(cfg: dict) -> dict:
     try:
         con = sqlite3.connect(f'file:{db}?mode=ro', uri=True, timeout=5)
         rows = con.execute('select status, count(*) from extractions group by status').fetchall()
+        verified = con.execute(
+            "select count(*) from extractions where status='written' and verified_at is not null"
+        ).fetchone()[0]
         con.close()
-        return {k: v for k, v in rows}
+        data = {k: v for k, v in rows}
+        # 对外统一口径：已写入（含已验证）
+        data['verified'] = verified
+        data['written_unverified'] = max(0, data.get('written', 0) - verified)
+        return data
     except Exception:
         return {}

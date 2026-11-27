@@ -809,3 +809,170 @@ body {
   border-color: var(--line);
   background: var(--bg-card);
 }
+
+
+/* ---------------- 记忆体检 ---------------- */
+.mem-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  padding-top: 12px;
+}
+
+.mem-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--bg-elev);
+}
+
+.mem-item span {
+  font-size: 10.5px;
+  letter-spacing: 0.5px;
+  color: var(--text-faint);
+}
+
+.mem-item strong {
+  font: 13px/1.4 Consolas, monospace;
+  color: var(--text);
+}
+
+
+/* ---------------- 记忆页 ---------------- */
+.mem-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.mem-toolbar input[type="search"] {
+  flex: 1;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--input-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.mem-toolbar input[type="search"]:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.mem-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mem-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--bg-card);
+}
+
+.mem-row:hover {
+  border-color: var(--accent);
+}
+
+.mem-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.mem-text {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.mem-meta {
+  margin-top: 5px;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font: 10.5px/1.4 Consolas, monospace;
+  color: var(--text-faint);
+}
+
+.mem-del {
+  flex: 0 0 auto;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.mem-del:hover {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+.mem-del.confirm {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+.mem-empty {
+  padding: 30px;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+
+.field select {
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--input-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  max-width: 320px;
+}
+
+
+.mem-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.mem-toggle input {
+  accent-color: var(--accent);
+}
+
+.mem-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.mem-text.expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+}

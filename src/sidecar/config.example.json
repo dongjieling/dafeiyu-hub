@@ -29,7 +29,9 @@
     "sync_qq": true,
     "sync_interval_seconds": 300,
     "qq_source_db": "",
-    "encrypt": true
+    "encrypt": true,
+    "scope_mode": "private_or_whitelist",
+    "whitelist_groups": []
   },
   "logging": {
     "log_content": false,
@@ -49,5 +51,7 @@
   "maintenance_mode": false,
   "outbox": {
     "enabled": true
-  }
+  },
+  "lm_db": "",
+  "memory_edit_enabled": true
 }

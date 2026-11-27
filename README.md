@@ -63,14 +63,14 @@
 
 | 文件 | 大小 | 链接 |
 |---|---|---|
-| `dafeiyu-hub-1.0.4-portable.exe` | 105.2 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v1.0.4/dafeiyu-hub-1.0.4-portable.exe) |
+| `dafeiyu-hub-1.2.0-portable.exe` | 105.2 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v1.2.0/dafeiyu-hub-1.2.0-portable.exe) |
 
 或在 [Releases 页面](https://github.com/dongjieling/dafeiyu-hub/releases) 选择版本下载。
 
 **放到普通目录**（如 `D:\大肥鱼中转站\`），不要放受限目录，双击运行。
 
 > ⚠️ 未签名 EXE，SmartScreen 可能提示「未知发布者」，选「更多信息 → 仍要运行」。
-> SHA256：`6737651bf99d843b5f9e7bd6aa3b2e50f181d16ca139866df06e97880dfd1a1d`
+> SHA256：`2270b311ee5cebf951109810b154258b9a07d7c3328c5d8029cff50db1817bd7`
 
 > ⚠️ 首次运行会提示配置 Python 路径与记忆库地址。
 
@@ -109,8 +109,8 @@ curl http://127.0.0.1:8787/health
 
 ## 版本
 
-当前版本 **v1.0.4**：契约层重构、人格四层兜底、outbox、E2E 测试、可观测、记忆质量。
-当前版本 **v1.0.4**：契约层重构、人格四层兜底、outbox、E2E 测试、可观测、记忆质量。
+当前版本 **v1.2.0**：契约层重构、人格四层兜底、outbox、E2E 测试、可观测、记忆质量。
+当前版本 **v1.2.0**：契约层重构、人格四层兜底、outbox、E2E 测试、可观测、记忆质量。
 
 ## 文档
 
@@ -151,6 +151,13 @@ src/
 │   └── config.example.json
 └── assets/             图标
 ```
+
+## 文档
+
+- [安装](docs/安装-中转站.md) · [使用说明](docs/使用说明.md)
+- [MCP 接入](docs/MCP-接入.md) · [配置迁移](docs/配置迁移.md)
+- [ADR](docs/adr/ADR-001-记忆链路契约层重构.md) · [路线图](docs/路线图-v1.0.md)
+- [NapCat 替代调研](docs/NapCat替代调研.md)
 
 ## 开发
 

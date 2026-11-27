@@ -17,7 +17,7 @@ from pathlib import Path
 
 from util import log
 
-ARCHIVE_SCHEMA_VERSION = 2
+ARCHIVE_SCHEMA_VERSION = 3
 
 
 class IncompatibleArchive(Exception):
@@ -92,6 +92,35 @@ def backup_database(db: Path, dest: Path) -> None:
         src.close()
 
 
+def archive_stats(db: Path) -> dict:
+    """归档库的体检数据（只读）。"""
+    if not db.exists():
+        return {}
+    con = sqlite3.connect(f'file:{db}?mode=ro', uri=True, timeout=5)
+    try:
+        rows = dict(con.execute('select status, count(*) from extractions group by status').fetchall())
+        total = sum(rows.values())
+        no_topics = con.execute(
+            "select count(*) from extractions where status != 'legacy' "
+            "and coalesce(topics, '') = ''"
+        ).fetchone()[0]
+        last = con.execute('select max(created_at) from extractions').fetchone()[0]
+        verified = con.execute(
+            "select count(*) from extractions where status='written' and verified_at is not null"
+        ).fetchone()[0]
+        return {
+            'total': total,
+            'by_status': rows,
+            'verified': verified,
+            'no_topics': no_topics,
+            'last_write_at': last or 0,
+        }
+    except Exception:
+        return {}
+    finally:
+        con.close()
+
+
 def ensure_archive(db: Path, backup: bool = True) -> MigrationResult:
     """确保归档库结构与代码版本一致。"""
     if not db.exists():
@@ -158,6 +187,27 @@ def ensure_archive(db: Path, backup: bool = True) -> MigrationResult:
             if moved:
                 log(f'历史未确认记录已归档: {moved} 条')
                 applied.append(f'legacy-unconfirmed-{moved}')
+
+        if version < 3:
+            add_columns()
+            # 1) 旧的 verified 状态合并进 written，验证时间单独记
+            old_verified = con.execute(
+                "UPDATE extractions SET status='written', "
+                "verified_at=coalesce(verified_at, created_at) WHERE status='verified'"
+            ).rowcount
+            if old_verified:
+                applied.append(f'merge-verified-{old_verified}')
+
+            # 2) 所有带 legacy 标记或旧加密格式的行统一为 legacy，不再参与指标
+            legacy = con.execute(
+                "UPDATE extractions SET status='legacy' "
+                "WHERE status IN ('legacy_unconfirmed', 'index_unconfirmed') "
+                "   OR (content LIKE 'enc:v1:%' AND coalesce(topics, '') = '')"
+            ).rowcount
+            if legacy:
+                applied.append(f'normalize-legacy-{legacy}')
+
+        if version < ARCHIVE_SCHEMA_VERSION:
             _set_version(con, ARCHIVE_SCHEMA_VERSION)
             applied.append(f'upgrade-{version}-to-{ARCHIVE_SCHEMA_VERSION}')
 

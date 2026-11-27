@@ -1,0 +1,111 @@
+"""v1.1 隐私白名单 + 记忆浏览/删除。"""
+
+import importlib
+import json
+import os
+import sqlite3
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+SIDECAR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(SIDECAR))
+
+
+def fresh_env(tmp: Path, names):
+    os.environ['HUB_DATA_DIR'] = str(tmp)
+    for n in names:
+        sys.modules.pop(n, None)
+    return {n: importlib.import_module(n) for n in names}
+
+
+class ScopeFilterTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix='hub_scope_'))
+        self.sync = fresh_env(self.tmp, ('config', 'crypto', 'sync'))['sync']
+
+    def cfg(self, mode, groups=None):
+        return {'archive': {'scope_mode': mode, 'whitelist_groups': groups or []}}
+
+    def test_friend_always_allowed(self):
+        self.assertTrue(self.sync.session_allowed(self.cfg('private_only'), '一号:FriendMessage:123'))
+
+    def test_group_requires_whitelist(self):
+        cfg = self.cfg('private_or_whitelist', ['1126415196'])
+        self.assertTrue(self.sync.session_allowed(cfg, '一号:GroupMessage:1126415196'))
+        self.assertFalse(self.sync.session_allowed(cfg, '一号:GroupMessage:999'))
+
+    def test_private_only_rejects_groups(self):
+        self.assertFalse(self.sync.session_allowed(self.cfg('private_only', ['1126415196']), '一号:GroupMessage:1126415196'))
+
+    def test_all_mode(self):
+        self.assertTrue(self.sync.session_allowed(self.cfg('all'), '一号:GroupMessage:999'))
+
+    def test_default_is_private_or_whitelist(self):
+        self.assertFalse(self.sync.session_allowed({}, '一号:GroupMessage:999'))
+        self.assertTrue(self.sync.session_allowed({}, '一号:FriendMessage:1'))
+
+
+class MemoriesTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix='hub_mem_'))
+        self.mods = fresh_env(self.tmp, ('config', 'crypto', 'memories'))
+        self.mem = self.mods['memories']
+        self.db = self.tmp / 'livingmemory.db'
+        con = sqlite3.connect(self.db)
+        con.executescript(
+            '''
+            create table documents (
+                id integer primary key autoincrement, doc_id text, text text,
+                metadata text, created_at text, updated_at text
+            );
+            create virtual table documents_fts using fts5(
+                search_text, content='', contentless_delete=1, tokenize='unicode61'
+            );
+            create table memory_atoms (
+                id integer primary key autoincrement, parent_memory_id integer, content text
+            );
+            create table graph_entries (
+                id integer primary key autoincrement, source_memory_id integer, content text
+            );
+            '''
+        )
+        for i, text in enumerate(['他今天中午吃了牛肉面', '他下周三去辩论赛'], 1):
+            con.execute(
+                'insert into documents(doc_id,text,metadata,created_at,updated_at) values(?,?,?,?,?)',
+                (f'doc-{i}', text, json.dumps({'importance': 0.6, 'session_id': '一号:FriendMessage:1'}),
+                 '2026-11-27T10:00:00', '2026-11-27T10:00:00'),
+            )
+            con.execute('insert into documents_fts(rowid, search_text) values(?,?)', (i, text))
+            con.execute('insert into memory_atoms(parent_memory_id, content) values(?,?)', (i, text))
+            con.execute('insert into graph_entries(source_memory_id, content) values(?,?)', (i, text))
+        con.commit()
+        con.close()
+        self.cfg = {'lm_db': str(self.db)}
+
+    def test_list_and_search(self):
+        res = self.mem.list_memories(self.cfg)
+        self.assertTrue(res['ok'])
+        self.assertEqual(res['total'], 2)
+        res2 = self.mem.list_memories(self.cfg, query='牛肉面')
+        self.assertEqual(res2['total'], 1)
+        self.assertIn('牛肉面', res2['items'][0]['text'])
+
+    def test_delete_cleans_all_tables(self):
+        res = self.mem.delete_memory(self.cfg, 1)
+        self.assertTrue(res['ok'])
+        con = sqlite3.connect(self.db)
+        self.assertEqual(con.execute('select count(*) from documents').fetchone()[0], 1)
+        self.assertEqual(con.execute('select count(*) from documents_fts').fetchone()[0], 1)
+        self.assertEqual(con.execute('select count(*) from memory_atoms where parent_memory_id=1').fetchone()[0], 0)
+        self.assertEqual(con.execute('select count(*) from graph_entries where source_memory_id=1').fetchone()[0], 0)
+        con.close()
+        self.assertTrue(Path(res['backup']).exists())
+
+    def test_delete_missing(self):
+        self.assertFalse(self.mem.delete_memory(self.cfg, 999)['ok'])
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)

@@ -37,6 +37,31 @@ def _kv_set(con, key: str, value: str) -> None:
                 (key, value))
 
 
+def session_allowed(cfg: dict, session_id: str) -> bool:
+    """按配置过滤要归档的会话。
+
+    scope_mode:
+      all                  全部
+      private_only         只有私聊
+      private_or_whitelist 私聊 + 白名单群（默认）
+    """
+    arc = cfg.get('archive') or {}
+    mode = (arc.get('scope_mode') or 'private_or_whitelist').strip()
+    if mode == 'all':
+        return True
+    parts = (session_id or '').split(':')
+    kind = parts[1] if len(parts) > 1 else ''
+    target = parts[2] if len(parts) > 2 else ''
+    if kind == 'FriendMessage':
+        return True
+    if kind == 'GroupMessage':
+        if mode == 'private_only':
+            return False
+        allowed = {str(x) for x in (arc.get('whitelist_groups') or [])}
+        return target in allowed
+    return mode == 'all'
+
+
 # ---------------- QQ 对话同步 ----------------
 def sync_qq(cfg: dict) -> int:
     """把 QQ 侧新消息追加到归档库，返回导入条数。"""
@@ -76,9 +101,13 @@ def sync_qq(cfg: dict) -> int:
         rows = rows_all
         cursor = int(_kv_get(acon, 'qq_cursor', '0') or 0)
         now = time.time()
+        skipped = 0
         for r in rows:
             sid = r['session_id'] or ''
             if not sid:
+                continue
+            if not session_allowed(cfg, sid):
+                skipped += 1
                 continue
             acon.execute(
                 'insert or ignore into sessions(source, session_key, persona_id, created_at, last_active) '
@@ -122,8 +151,8 @@ def sync_qq(cfg: dict) -> int:
         acon.close()
         scon.close()
 
-        if imported:
-            log(f'QQ 归档同步: 新增 {imported} 条（游标 {cursor}）')
+        if imported or skipped:
+            log(f'QQ 归档同步: 新增 {imported} 条' + (f'，跳过 {skipped} 条（不在白名单）' if skipped else '') + f'（游标 {cursor}）')
         return imported
     except Exception as e:
         log(f'QQ 归档同步失败: {str(e)[:120]}')

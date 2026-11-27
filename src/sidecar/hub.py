@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from dataclasses import asdict
 import ssl
 import threading
@@ -20,7 +21,9 @@ import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import memories
 import memory
+import migrations
 import outbox
 import persona
 import prompt
@@ -67,6 +70,60 @@ def _archive_encrypted() -> bool:
 
 
 _compat_state: dict = {'report': {}, 'checked_at': 0.0}
+
+
+def _lm_db_path(cfg: dict) -> Path:
+    raw = (cfg.get('lm_db') or '').strip()
+    if raw:
+        return Path(raw)
+    return Path.home() / '.astrbot' / 'data' / 'plugin_data' / 'astrbot_plugin_livingmemory' / 'livingmemory.db'
+
+
+def memory_health(cfg: dict) -> dict:
+    """/health 里的记忆体检数据（只读，缓存 60 秒）。"""
+    global _MEMORY_HEALTH_CACHE
+    now = time.time()
+    if '_MEMORY_HEALTH_CACHE' in globals() and now - _MEMORY_HEALTH_CACHE[0] < 60:
+        return _MEMORY_HEALTH_CACHE[1]
+
+    import sqlite3
+
+    from config import data_path
+
+    out = {'archive': {}, 'lm': {}, 'ok': False}
+    try:
+        arc = cfg.get('archive') or {}
+        db = data_path(arc.get('db_path') or 'archive.db')
+        out['archive'] = migrations.archive_stats(db)
+    except Exception as e:
+        out['archive'] = {'error': str(e)[:80]}
+
+    lm_db = _lm_db_path(cfg)
+    out['lm_path'] = str(lm_db)
+    try:
+        if lm_db.exists():
+            con = sqlite3.connect(f'file:{lm_db}?mode=ro', uri=True, timeout=5)
+            try:
+                def count(sql: str) -> int:
+                    try:
+                        return con.execute(sql).fetchone()[0]
+                    except Exception:
+                        return 0
+
+                out['lm'] = {
+                    'documents': count('select count(*) from documents'),
+                    'atoms': count('select count(*) from memory_atoms'),
+                    'graph_nodes': count('select count(*) from graph_nodes'),
+                    'graph_edges': count('select count(*) from graph_edges'),
+                }
+                out['ok'] = True
+            finally:
+                con.close()
+    except Exception as e:
+        out['lm'] = {'error': str(e)[:80]}
+
+    _MEMORY_HEALTH_CACHE = (now, out)
+    return out
 
 
 def startup_contracts(cfg: dict, migration_ok: bool, config_exists: bool) -> list:
@@ -150,6 +207,38 @@ def start_compat_monitor(interval: int = 300) -> None:
     log(f'契约监控已启动（每 {interval} 秒）')
 
 
+def _save_config() -> None:
+    """把当前 CFG 写回数据目录的 config.json（原子替换）。"""
+    import os
+
+    tmp = CONFIG_PATH.with_suffix('.json.tmp')
+    tmp.write_text(json.dumps(CFG, ensure_ascii=False, indent=2), encoding='utf-8')
+    os.replace(tmp, CONFIG_PATH)
+
+
+def archive_config(cfg: dict) -> dict:
+    arc = cfg.get('archive') or {}
+    return {
+        'scope_mode': arc.get('scope_mode') or 'private_or_whitelist',
+        'whitelist_groups': [str(x) for x in (arc.get('whitelist_groups') or [])],
+        'memory_edit_enabled': bool(cfg.get('memory_edit_enabled', True)),
+    }
+
+
+def set_archive_config(cfg: dict, patch: dict) -> dict:
+    arc = cfg.setdefault('archive', {})
+    mode = (patch.get('scope_mode') or '').strip()
+    if mode in ('all', 'private_only', 'private_or_whitelist'):
+        arc['scope_mode'] = mode
+    if 'whitelist_groups' in patch:
+        groups = patch.get('whitelist_groups') or []
+        arc['whitelist_groups'] = [str(g).strip() for g in groups if str(g).strip()]
+    if 'memory_edit_enabled' in patch:
+        cfg['memory_edit_enabled'] = bool(patch['memory_edit_enabled'])
+    _save_config()
+    return archive_config(cfg)
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
     server_version = 'DafeiyuHub/' + '0.3'
@@ -159,6 +248,28 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.startswith('/health') or self.path.startswith('/v1/models'):
             return
         log(f'{self.address_string()} {fmt % args}')
+
+    def _memory_query(self) -> dict:
+        from urllib.parse import parse_qs, urlparse
+
+        q = parse_qs(urlparse(self.path).query)
+        return {
+            'query': (q.get('query') or [''])[0],
+            'limit': int((q.get('limit') or ['30'])[0] or 30),
+            'offset': int((q.get('offset') or ['0'])[0] or 0),
+            'include_selftest': (q.get('include_selftest') or ['0'])[0] in ('1', 'true'),
+        }
+
+    def _body_json(self) -> dict:
+        try:
+            import json as _json
+
+            n = int(self.headers.get('Content-Length') or 0)
+            if n <= 0:
+                return {}
+            return _json.loads(self.rfile.read(n).decode('utf-8') or '{}')
+        except Exception:
+            return {}
 
     def _json(self, code: int, obj: dict) -> None:
         body = json.dumps(obj, ensure_ascii=False).encode('utf-8')
@@ -170,10 +281,22 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------------- GET ----------------
     def do_GET(self):
+        if self.path in ('/v1/config/archive', '/config/archive'):
+            self._json(200, archive_config(CFG))
+            return
+
+        if self.path in ('/v1/memories', '/memories') or self.path.startswith('/v1/memories?'):
+            self._json(200, memories.list_memories(CFG, **self._memory_query()))
+            return
+
         if self.path.startswith('/health'):
             snap = persona.snapshot(CFG)
             up = read_upstream(CFG)
-            lm = memory.probe_lm(CFG)
+            global _LM_PROBE_CACHE
+            now = time.time()
+            if '_LM_PROBE_CACHE' not in globals() or now - _LM_PROBE_CACHE[0] > 30:
+                _LM_PROBE_CACHE = (now, memory.probe_lm(CFG))
+            lm = _LM_PROBE_CACHE[1]
             kb = CFG.get('knowledge') or {}
             self._json(200, {
                 'status': 'ok',
@@ -202,6 +325,7 @@ class Handler(BaseHTTPRequestHandler):
                 'compat': compat_report(),
                 'compat_checked_at': int(_compat_state['checked_at']),
                 'outbox': outbox.stats(CFG),
+                'memory': memory_health(CFG),
                 'pipeline': telemetry.summary(),
                 'archive_encrypted': _archive_encrypted(),
             })
@@ -217,19 +341,44 @@ class Handler(BaseHTTPRequestHandler):
         self._json(404, {'error': {'message': 'not found'}})
 
     # ---------------- POST ----------------
+    def _drain_body(self) -> None:
+        """读完请求体，避免 keep-alive 连接里残留的 body 被当成下一个请求行。"""
+        try:
+            n = int(self.headers.get('Content-Length') or 0)
+            if n > 0:
+                self.rfile.read(n)
+        except Exception:
+            pass
+
     def do_POST(self):
+        if self.path in ('/v1/config/archive', '/config/archive'):
+            self._json(200, set_archive_config(CFG, self._body_json()))
+            return
+
+        if self.path in ('/v1/memories/delete', '/memories/delete'):
+            self._drain_body()
+            if (CFG.get('memory_edit_enabled', True) is False):
+                self._json(403, {'ok': False, 'error': '记忆编辑已关闭（memory_edit_enabled=false）'})
+                return
+            self._json(200, memories.delete_memory(CFG, int((self._body_json() or {}).get('id') or 0)))
+            return
+
         if self.path in ('/v1/patch/status', '/patch/status'):
+            self._drain_body()
             self._json(200, asdict(patch_manager.status()))
             return
 
         if self.path in ('/v1/patch/apply', '/patch/apply'):
+            self._drain_body()
             self._json(200, asdict(patch_manager.apply()))
             return
 
         if self.path in ('/v1/selftest', '/selftest'):
+            self._drain_body()
             self._handle_selftest()
             return
         if self.path in ('/v1/selftest/cleanup', '/selftest/cleanup'):
+            self._drain_body()
             self._handle_selftest_cleanup()
             return
 

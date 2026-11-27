@@ -18,7 +18,7 @@
       <button class="nav-item" data-page="params">参数</button>
       <button class="nav-item" data-page="config">配置</button>
       <button class="nav-item" data-page="logs">日志</button>
-      <button class="nav-item disabled" data-page="memory" disabled>记忆<span class="badge">后续</span></button>
+      <button class="nav-item" data-page="memory">记忆</button>
       <button class="nav-item" data-page="about">关于</button>
     </nav>
 
@@ -152,6 +152,23 @@
         </div>
       </details>
 
+      <details class="panel" id="adv-memory">
+        <summary>
+          <span>记忆体检</span>
+          <em id="memory-summary">归档与记忆库的规模、脏数据</em>
+        </summary>
+        <div class="panel-body">
+          <div class="mem-grid" id="memory-health">
+            <div class="mem-item"><span>归档条数</span><strong id="mem-archive">—</strong></div>
+            <div class="mem-item"><span>记忆文档</span><strong id="mem-docs">—</strong></div>
+            <div class="mem-item"><span>原子</span><strong id="mem-atoms">—</strong></div>
+            <div class="mem-item"><span>图谱节点</span><strong id="mem-nodes">—</strong></div>
+            <div class="mem-item"><span>无关键词</span><strong id="mem-notopics">—</strong></div>
+            <div class="mem-item"><span>旧账 / 死信</span><strong id="mem-legacy">—</strong></div>
+          </div>
+        </div>
+      </details>
+
       <details class="panel" id="adv-pipeline">
         <summary>
           <span>最近流水线</span>
@@ -229,10 +246,60 @@
         <span class="field-hint">换电脑 / 重装系统前必须导出，否则加密的归档解不开</span>
       </div>
 
+
+      <div class="section-title"><h2>归档范围（隐私）</h2></div>
+      <div class="form">
+        <label class="field">
+          <span>同步哪些会话</span>
+          <select id="cfg-scope-mode">
+            <option value="private_or_whitelist">我的私聊 + 指定群</option>
+            <option value="private_only">只同步我的私聊</option>
+            <option value="all">全部（不推荐）</option>
+          </select>
+          <em>只影响 QQ 归档；桌面端对话始终记录</em>
+        </label>
+        <label class="field">
+          <span>白名单群号</span>
+          <input type="text" id="cfg-whitelist" placeholder="用逗号分隔，例如 1126415196, 1103135866" />
+          <em>仅在「我的私聊 + 指定群」模式下生效</em>
+        </label>
+        <label class="field checkbox">
+          <input type="checkbox" id="cfg-memory-edit" />
+          <span>允许在「记忆」页删除记忆</span>
+        </label>
+        <div class="actions">
+          <button class="btn primary" id="btn-save-privacy">保存隐私设置</button>
+          <span class="field-hint" id="privacy-status"></span>
+        </div>
+      </div>
+
       <div class="hint">
         <strong>配置文件：</strong><code id="cfg-path">—</code><br />
         记忆、提炼、知识库等参数在「参数」页调整；这里只放启动相关的设置。
       </div>
+    </section>
+
+
+    <!-- 记忆页 -->
+    <section class="page" id="page-memory">
+      <header class="page-head">
+        <div>
+          <h1>记忆</h1>
+          <p class="page-sub">她记住的事，可搜索、可删除</p>
+        </div>
+        <div class="actions">
+          <button class="btn ghost" id="btn-memory-refresh">刷新</button>
+        </div>
+      </header>
+
+      <div class="mem-toolbar">
+        <input type="search" id="mem-search" placeholder="搜索记忆内容…" />
+        <label class="mem-toggle"><input type="checkbox" id="mem-show-selftest" /> 显示自检记录</label>
+        <span class="field-hint" id="mem-count">—</span>
+      </div>
+
+      <div class="mem-list" id="mem-list"></div>
+      <div class="mem-empty" id="mem-empty" hidden>没有匹配的记忆</div>
     </section>
 
     <!-- 日志页 -->

@@ -51,6 +51,7 @@ document.querySelectorAll('.nav-item:not(.disabled)').forEach((btn) => {
       window.__paramsLoaded = true;
       loadParams();
     }
+    if (page === 'memory') loadMemories();
   });
 });
 
@@ -179,18 +180,52 @@ function render() {
   // 归档与写入队列
   const arcEl = document.getElementById('val-archive');
   if (arcEl) {
-    arcEl.textContent = health?.ok ? `${health.data.archive_qq ?? 0} / ${health.data.archive_local ?? 0}` : '—';
+    const ob2 = health?.data?.outbox || {};
+    const legacy2 = (health?.data?.memory?.archive?.by_status || {}).legacy ?? 0;
+    arcEl.textContent = health?.ok
+      ? `${health.data.archive_qq ?? 0} / ${health.data.archive_local ?? 0}${legacy2 ? ` · 旧账 ${legacy2}` : ''}`
+      : '—';
   }
   const qEl = document.getElementById('val-queue');
   if (qEl) {
     if (!health?.ok) {
       qEl.textContent = '—';
     } else {
-      const pending = health.data.pending_retry ?? 0;
-      const dead = health.data.dead_letters ?? 0;
-      qEl.textContent = dead > 0 ? `待重试 ${pending} · 死信 ${dead}` : `待重试 ${pending}`;
-      qEl.style.color = dead > 0 ? 'var(--warn)' : '';
+      const ob = health.data.outbox || {};
+      const written = ob.written ?? 0;
+      const verified = ob.verified ?? 0;
+      const pending = (ob.pending ?? 0) + (ob.sending ?? 0);
+      const dead = ob.dead ?? 0;
+      const failed = ob.failed ?? 0;
+      const parts = [`已写入 ${written}`, `验证 ${verified}`, `待处理 ${pending}`];
+      if (dead > 0) parts.push(`死信 ${dead}`);
+      else if (failed > 0) parts.push(`失败 ${failed}`);
+      qEl.textContent = parts.join(' · ');
+      qEl.style.color = dead > 0 || failed > 0 ? 'var(--warn)' : '';
     }
+  }
+
+  // 记忆体检
+  const mem = health?.data?.memory || {};
+  const arc = mem.archive || {};
+  const lm = mem.lm || {};
+  const setText = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  };
+  setText('mem-archive', arc.total ?? '—');
+  setText('mem-docs', lm.documents ?? '—');
+  setText('mem-atoms', lm.atoms ?? '—');
+  setText('mem-nodes', lm.graph_nodes ?? '—');
+  setText('mem-notopics', arc.no_topics ?? '—');
+  const legacy = (arc.by_status || {}).legacy ?? 0;
+  const deadLetters = (health?.data?.outbox || {}).dead ?? 0;
+  setText('mem-legacy', `${legacy} / ${deadLetters}`);
+  const memSummary = document.getElementById('memory-summary');
+  if (memSummary) {
+    memSummary.textContent = health?.ok
+      ? `${arc.total ?? 0} 条归档 · ${lm.documents ?? 0} 文档 · ${lm.graph_edges ?? 0} 条图谱关系`
+      : '归档与记忆库的规模、脏数据';
   }
 
   const aboutVer = document.getElementById('about-version');
@@ -331,6 +366,93 @@ async function refresh() {
   render();
 }
 
+// ---------- 记忆浏览 ----------
+let memQuery = '';
+
+async function loadMemories() {
+  const list = document.getElementById('mem-list');
+  const empty = document.getElementById('mem-empty');
+  const count = document.getElementById('mem-count');
+  if (!list) return;
+  list.innerHTML = '<div class="mem-empty">读取中…</div>';
+  try {
+    const showSelftest = document.getElementById('mem-show-selftest');
+    const res = await window.hub.memories({
+      query: memQuery,
+      limit: 50,
+      include_selftest: Boolean(showSelftest && showSelftest.checked),
+    });
+    if (!res || res.ok === false) {
+      list.innerHTML = '';
+      empty.hidden = false;
+      empty.textContent = (res && res.error) || '记忆库读取失败';
+      return;
+    }
+    list.innerHTML = '';
+    const items = res.items || [];
+    if (count) count.textContent = `共 ${res.total} 条，显示 ${items.length} 条`;
+    empty.hidden = items.length > 0;
+    for (const item of items) {
+      const row = document.createElement('div');
+      row.className = 'mem-row';
+
+      const main = document.createElement('div');
+      main.className = 'mem-main';
+      const text = document.createElement('div');
+      text.className = 'mem-text';
+      text.textContent = item.text || '';
+      text.title = '点击展开 / 收起';
+      text.addEventListener('click', () => text.classList.toggle('expanded'));
+      const meta = document.createElement('div');
+      meta.className = 'mem-meta';
+      const imp = item.importance == null ? '—' : Number(item.importance).toFixed(2);
+      const when = item.created_at ? String(item.created_at).slice(0, 16).replace('T', ' ') : '—';
+      meta.textContent = `#${item.id} · 重要度 ${imp} · ${when}${item.session_id ? ' · ' + item.session_id : ''}`;
+      main.appendChild(text);
+      main.appendChild(meta);
+
+      const btn = document.createElement('button');
+      btn.className = 'mem-del';
+      btn.textContent = '删除';
+      let armed = false;
+      let timer = null;
+      btn.addEventListener('click', async () => {
+        if (!armed) {
+          armed = true;
+          btn.classList.add('confirm');
+          btn.textContent = '确认删除';
+          timer = setTimeout(() => {
+            armed = false;
+            btn.classList.remove('confirm');
+            btn.textContent = '删除';
+          }, 3000);
+          return;
+        }
+        clearTimeout(timer);
+        btn.disabled = true;
+        const res2 = await window.hub.memoryDelete(item.id);
+        if (res2 && res2.ok) {
+          appendLog(`已删除记忆 #${item.id}（备份 ${String(res2.backup || '').split('\\').pop()}）`);
+          row.remove();
+        } else {
+          btn.disabled = false;
+          btn.textContent = '删除';
+          btn.classList.remove('confirm');
+          appendLog('删除失败: ' + ((res2 && res2.error) || '未知原因'));
+        }
+      });
+
+      row.appendChild(main);
+      row.appendChild(btn);
+      list.appendChild(row);
+    }
+  } catch (e) {
+    list.innerHTML = '';
+    empty.hidden = false;
+    empty.textContent = '读取失败：' + e.message;
+  }
+}
+
 // ---------- 日志 ----------
 function appendLog(line) {
   const box = $('#logs');
@@ -366,6 +488,24 @@ $('#btn-stop').addEventListener('click', async () => {
 
 $('#btn-check').addEventListener('click', refresh);
 $('#btn-clear').addEventListener('click', () => ($('#logs').textContent = ''));
+
+if ($('#btn-memory-refresh')) {
+  $('#btn-memory-refresh').addEventListener('click', () => loadMemories());
+}
+if ($('#mem-show-selftest')) {
+  $('#mem-show-selftest').addEventListener('change', () => loadMemories());
+}
+
+if ($('#mem-search')) {
+  let timer = null;
+  $('#mem-search').addEventListener('input', (e) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      memQuery = e.target.value.trim();
+      loadMemories();
+    }, 250);
+  });
+}
 $('#btn-open-logs').addEventListener('click', () => window.hub.revealLogs());
 
 // ---------- 配置 ----------
@@ -395,6 +535,43 @@ $('#btn-save').addEventListener('click', async () => {
   refresh();
 });
 
+// ---------- 归档范围（隐私） ----------
+async function loadArchiveConfig() {
+  try {
+    const cfg = await window.hub.archiveConfig();
+    if (!cfg) return;
+    const mode = document.getElementById('cfg-scope-mode');
+    if (mode) mode.value = cfg.scope_mode || 'private_or_whitelist';
+    const wl = document.getElementById('cfg-whitelist');
+    if (wl) wl.value = (cfg.whitelist_groups || []).join(', ');
+    const edit = document.getElementById('cfg-memory-edit');
+    if (edit) edit.checked = cfg.memory_edit_enabled !== false;
+  } catch (e) {
+    appendLog('[ui!] 隐私配置读取失败: ' + e.message);
+  }
+}
+
+const savePrivacyBtn = document.getElementById('btn-save-privacy');
+if (savePrivacyBtn) {
+  savePrivacyBtn.addEventListener('click', async () => {
+    const mode = document.getElementById('cfg-scope-mode');
+    const wl = document.getElementById('cfg-whitelist');
+    const edit = document.getElementById('cfg-memory-edit');
+    const groups = (wl ? wl.value : '')
+      .split(/[,，\s]+/)
+      .map((x) => x.trim())
+      .filter(Boolean);
+    const res = await window.hub.setArchiveConfig({
+      scope_mode: mode ? mode.value : 'private_or_whitelist',
+      whitelist_groups: groups,
+      memory_edit_enabled: edit ? edit.checked : true,
+    });
+    const status = document.getElementById('privacy-status');
+    if (status) status.textContent = res && res.scope_mode ? '已保存，下一轮同步生效' : '保存失败';
+    appendLog('隐私设置已保存：' + ((res && res.scope_mode) || '未知'));
+  });
+}
+
 // ---------- 初始化 ----------
 // 窗口隐藏时降频，避免无意义轮询；先启动，避免初始化异常把轮询一起带走
 setInterval(() => {
@@ -416,6 +593,7 @@ setInterval(() => {
   }
   try {
     await loadConfig();
+    await loadArchiveConfig();
     await refresh();
     await refreshPatch();
   } catch (e) {
