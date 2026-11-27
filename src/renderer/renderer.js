@@ -32,7 +32,9 @@ function initTheme() {
   if (btn) {
     btn.addEventListener('click', () => {
       const now = document.documentElement.getAttribute('data-theme');
-      applyTheme(now === 'light' ? 'dark' : 'light');
+      const next = now === 'light' ? 'dark' : 'light';
+      applyTheme(next);
+      toast(next === 'light' ? '已切换到浅色' : '已切换到深色', 'info', 1600);
     });
   }
 }
@@ -182,6 +184,44 @@ if (helpClose) helpClose.addEventListener('click', closeHelp);
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeHelp();
 });
+
+
+// ---------- 交互反馈 ----------
+function toast(message, type = 'info', ms = 2600) {
+  const stack = document.getElementById('toast-stack');
+  if (!stack) return;
+  const item = document.createElement('div');
+  item.className = `toast ${type}`;
+  item.textContent = message;
+  stack.appendChild(item);
+  setTimeout(() => {
+    item.classList.add('out');
+    setTimeout(() => item.remove(), 200);
+  }, ms);
+}
+
+async function withBusy(btn, task, opts = {}) {
+  if (!btn) return task();
+  if (btn.dataset.busy === '1') return undefined;
+  btn.dataset.busy = '1';
+  btn.classList.add('loading');
+  try {
+    const result = await task();
+    if (opts.success) {
+      toast(typeof opts.success === 'function' ? opts.success(result) : opts.success, 'ok');
+    }
+    return result;
+  } catch (e) {
+    toast((opts.error || '操作失败') + '：' + (e && e.message ? e.message : e), 'bad', 4200);
+    return undefined;
+  } finally {
+    delete btn.dataset.busy;
+    btn.classList.remove('loading');
+  }
+}
+
+window.toast = toast;
+window.withBusy = withBusy;
 
 // ---------- 页面切换 ----------
 document.querySelectorAll('.nav-item:not(.disabled)').forEach((btn) => {
@@ -413,14 +453,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const list = document.getElementById('selftest-steps');
       if (status) status.textContent = '正在自检…';
       if (list) list.innerHTML = '';
-      btn.disabled = true;
-      try {
+      await withBusy(btn, async () => {
         const res = await window.hub.selftest();
         renderSelftest(res);
         appendLog(res.ok ? '连通性自检通过' : '连通性自检未通过');
-      } finally {
-        btn.disabled = false;
-      }
+        toast(res && res.ok ? '自检全部通过' : '自检有步骤未通过', res && res.ok ? 'ok' : 'bad', 4000);
+      });
     });
   }
 
@@ -431,9 +469,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const btn = document.getElementById('btn-export-key');
   if (!btn) return;
   btn.addEventListener('click', async () => {
-    const res = await window.hub.exportArchiveKey();
-    if (res.canceled) return;
-    appendLog(res.ok ? `归档密钥已导出：${res.path}` : `导出失败：${res.error || ''}`);
+    await withBusy(btn, async () => {
+      const res = await window.hub.exportArchiveKey();
+      if (res.canceled) {
+        toast('已取消导出', 'info');
+        return;
+      }
+      appendLog(res.ok ? `归档密钥已导出：${res.path}` : `导出失败：${res.error || ''}`);
+      toast(res.ok ? '归档密钥已导出' : '导出失败：' + (res.error || ''), res.ok ? 'ok' : 'bad', 4000);
+    });
   });
 });
 
@@ -481,18 +525,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const btn = document.getElementById('btn-patch-fix');
   if (btn) {
     btn.addEventListener('click', async () => {
-      btn.disabled = true;
-      try {
+      await withBusy(btn, async () => {
         const res = await window.hub.patchApply();
         if (res && res.ok) {
           appendLog('记忆原子补丁已修复（插件已重载）');
+          toast('补丁已修复并重载插件', 'ok');
         } else {
           appendLog('修复失败: ' + ((res && (res.detail || res.state)) || '未知原因'));
+          toast('修复失败：' + ((res && (res.detail || res.state)) || '未知原因'), 'bad', 4200);
         }
         await refreshPatch();
-      } finally {
-        btn.disabled = false;
-      }
+      });
     });
   }
 });
@@ -668,18 +711,22 @@ function selectMemory(id) {
       return;
     }
     btn.disabled = true;
-    const res = await window.hub.memoryDelete(item.id);
-    if (res && res.ok) {
-      appendLog(`已删除记忆 #${item.id}（备份 ${String(res.backup || '').split('\\').pop()}）`);
-      panel.hidden = true;
-      memState.selected = null;
-      await loadMemories(true);
-    } else {
-      status.textContent = (res && res.error) || '删除失败';
-      btn.disabled = false;
-      btn.textContent = '删除这条';
-      btn.classList.remove('confirm');
-    }
+    await withBusy(btn, async () => {
+      const res = await window.hub.memoryDelete(item.id);
+      if (res && res.ok) {
+        appendLog(`已删除记忆 #${item.id}（备份 ${String(res.backup || '').split('\\').pop()}）`);
+        toast(`已删除记忆 #${item.id}`, 'ok');
+        panel.hidden = true;
+        memState.selected = null;
+        await loadMemories(true);
+      } else {
+        status.textContent = (res && res.error) || '删除失败';
+        toast('删除失败：' + ((res && res.error) || '未知原因'), 'bad', 4000);
+        btn.textContent = '删除这条';
+        btn.classList.remove('confirm');
+      }
+    });
+    btn.disabled = false;
   };
 }
 
@@ -786,7 +833,7 @@ function applyRange(range) {
 
 function bindMemoryPage() {
   const refresh = document.getElementById('btn-memory-refresh');
-  if (refresh) refresh.addEventListener('click', () => loadMemories(true));
+  if (refresh) refresh.addEventListener('click', () => withBusy(refresh, () => loadMemories(true), { success: '记忆已刷新' }));
 
   const search = document.getElementById('mem-search');
   if (search) {
@@ -825,7 +872,7 @@ function bindMemoryPage() {
   }
 
   const more = document.getElementById('btn-mem-more');
-  if (more) more.addEventListener('click', () => loadMemories(false));
+  if (more) more.addEventListener('click', () => withBusy(more, () => loadMemories(false)));
 
   const close = document.getElementById('mem-detail-close');
   if (close) close.addEventListener('click', () => {
@@ -860,21 +907,32 @@ window.addEventListener('unhandledrejection', (e) => {
 });
 
 // ---------- 按钮 ----------
-$('#btn-start').addEventListener('click', async () => {
-  $('#btn-start').disabled = true;
-  await window.hub.start();
-  setTimeout(refresh, 800);
+$('#btn-start').addEventListener('click', () =>
+  withBusy($('#btn-start'), async () => {
+    await window.hub.start();
+    setTimeout(refresh, 800);
+  }, { success: '启动指令已发送' })
+);
+
+$('#btn-stop').addEventListener('click', () =>
+  withBusy($('#btn-stop'), async () => {
+    await window.hub.stop();
+    setTimeout(refresh, 400);
+  }, { success: '已停止服务' })
+);
+
+$('#btn-check').addEventListener('click', () =>
+  withBusy($('#btn-check'), refresh, { success: '已重新检测' })
+);
+
+$('#btn-clear').addEventListener('click', () => {
+  $('#logs').textContent = '';
+  toast('日志已清空', 'ok');
 });
 
-$('#btn-stop').addEventListener('click', async () => {
-  await window.hub.stop();
-  setTimeout(refresh, 400);
-});
-
-$('#btn-check').addEventListener('click', refresh);
-$('#btn-clear').addEventListener('click', () => ($('#logs').textContent = ''));
-
-$('#btn-open-logs').addEventListener('click', () => window.hub.revealLogs());
+$('#btn-open-logs').addEventListener('click', () =>
+  withBusy($('#btn-open-logs'), () => window.hub.revealLogs(), { success: '已打开数据目录' })
+);
 
 // ---------- 配置 ----------
 async function loadConfig() {
@@ -892,16 +950,18 @@ async function loadConfig() {
   $('#cfg-autostart').checked = Boolean(cfg.autoStartSidecar);
 }
 
-$('#btn-save').addEventListener('click', async () => {
-  const patch = {
-    hubPort: Number($('#cfg-port').value) || 8787,
-    pythonPath: $('#cfg-python').value.trim(),
-    autoStartSidecar: $('#cfg-autostart').checked,
-  };
-  state.cfg = await window.hub.setConfig(patch);
-  appendLog(`配置已保存：端口 ${patch.hubPort}`);
-  refresh();
-});
+$('#btn-save').addEventListener('click', () =>
+  withBusy($('#btn-save'), async () => {
+    const patch = {
+      hubPort: Number($('#cfg-port').value) || 8787,
+      pythonPath: $('#cfg-python').value.trim(),
+      autoStartSidecar: $('#cfg-autostart').checked,
+    };
+    state.cfg = await window.hub.setConfig(patch);
+    appendLog(`配置已保存：端口 ${patch.hubPort}`);
+    refresh();
+  }, { success: '配置已保存' })
+);
 
 // ---------- 归档范围（隐私） ----------
 async function loadArchiveConfig() {
@@ -929,14 +989,17 @@ if (savePrivacyBtn) {
       .split(/[,，\s]+/)
       .map((x) => x.trim())
       .filter(Boolean);
-    const res = await window.hub.setArchiveConfig({
-      scope_mode: mode ? mode.value : 'private_or_whitelist',
-      whitelist_groups: groups,
-      memory_edit_enabled: edit ? edit.checked : true,
+    await withBusy(savePrivacyBtn, async () => {
+      const res = await window.hub.setArchiveConfig({
+        scope_mode: mode ? mode.value : 'private_or_whitelist',
+        whitelist_groups: groups,
+        memory_edit_enabled: edit ? edit.checked : true,
+      });
+      const status = document.getElementById('privacy-status');
+      if (status) status.textContent = res && res.scope_mode ? '已保存，下一轮同步生效' : '保存失败';
+      appendLog('隐私设置已保存：' + ((res && res.scope_mode) || '未知'));
+      toast(res && res.scope_mode ? '隐私设置已保存' : '保存失败', res && res.scope_mode ? 'ok' : 'bad');
     });
-    const status = document.getElementById('privacy-status');
-    if (status) status.textContent = res && res.scope_mode ? '已保存，下一轮同步生效' : '保存失败';
-    appendLog('隐私设置已保存：' + ((res && res.scope_mode) || '未知'));
   });
 }
 

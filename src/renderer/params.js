@@ -88,7 +88,13 @@ function renderSection({ title, subtitle, status, fields, values, onSave, saveLa
 
   const actions = el('div', 'param-actions');
   const saveBtn = el('button', 'btn primary', saveLabel || '保存');
-  saveBtn.addEventListener('click', () => onSave(patch));
+  saveBtn.addEventListener('click', async () => {
+    if (window.withBusy) {
+      await window.withBusy(saveBtn, () => onSave(patch));
+    } else {
+      await onSave(patch);
+    }
+  });
   actions.appendChild(saveBtn);
 
   if (extraButton) {
@@ -173,11 +179,19 @@ async function loadParams() {
             const saved = await window.hub.params.pluginSave(info.key, patch);
             if (!saved.ok) {
               appendLog(`保存失败: ${saved.error}`);
+              if (window.toast) window.toast('保存失败：' + (saved.error || ''), 'bad', 4000);
               return;
             }
             appendLog(`已保存 ${info.name} 参数（备份 ${saved.backup || '无'}）`);
             const reloaded = await window.hub.params.pluginReload(info.key);
             appendLog(reloaded.ok ? `${info.name} 已重载生效` : `重载失败: ${reloaded.error || reloaded.status}`);
+            if (window.toast) {
+              window.toast(
+                reloaded.ok ? `${info.name} 已保存并重载` : `已保存，但重载失败：${reloaded.error || reloaded.status}`,
+                reloaded.ok ? 'ok' : 'bad',
+                4000
+              );
+            }
             setTimeout(loadParams, 1200);
           },
         })
@@ -190,5 +204,9 @@ async function loadParams() {
 
 document.addEventListener('DOMContentLoaded', () => {
   const btn = document.getElementById('btn-params-reload');
-  if (btn) btn.addEventListener('click', loadParams);
+  if (btn) {
+    btn.addEventListener('click', () =>
+      window.withBusy ? window.withBusy(btn, loadParams, { success: '已重新检测参数' }) : loadParams()
+    );
+  }
 });
