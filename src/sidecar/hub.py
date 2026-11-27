@@ -261,6 +261,8 @@ class Handler(BaseHTTPRequestHandler):
             'kind': (q.get('kind') or ['all'])[0],
             'min_importance': float((q.get('min_importance') or ['0'])[0] or 0),
             'sort': (q.get('sort') or ['new'])[0],
+            'date_from': (q.get('date_from') or [''])[0],
+            'date_to': (q.get('date_to') or [''])[0],
         }
 
     def _body_json(self) -> dict:

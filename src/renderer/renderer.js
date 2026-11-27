@@ -372,6 +372,9 @@ const memState = {
   kind: 'all',
   sort: 'new',
   minImportance: 0,
+  range: 'all',
+  dateFrom: '',
+  dateTo: '',
   includeSelftest: false,
   offset: 0,
   items: [],
@@ -549,6 +552,8 @@ async function loadMemories(reset = true) {
       kind: memState.kind,
       sort: memState.sort,
       min_importance: memState.minImportance,
+      date_from: memState.dateFrom,
+      date_to: memState.dateTo,
       include_selftest: memState.includeSelftest,
       limit: 40,
       offset: memState.offset,
@@ -589,6 +594,50 @@ async function loadMemories(reset = true) {
   }
 }
 
+function isoDate(d) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function rangeDates(range) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (range === 'today') return { from: isoDate(today), to: isoDate(today) };
+  if (range === 'yesterday') {
+    const d = new Date(today);
+    d.setDate(d.getDate() - 1);
+    return { from: isoDate(d), to: isoDate(d) };
+  }
+  if (range === 'week') {
+    const d = new Date(today);
+    const day = (d.getDay() + 6) % 7; // 周一为一周起点
+    d.setDate(d.getDate() - day);
+    return { from: isoDate(d), to: isoDate(today) };
+  }
+  if (range === 'month') {
+    return { from: isoDate(new Date(today.getFullYear(), today.getMonth(), 1)), to: isoDate(today) };
+  }
+  return { from: '', to: '' };
+}
+
+function applyRange(range) {
+  memState.range = range;
+  const custom = document.getElementById('mem-custom');
+  if (range === 'custom') {
+    if (custom) custom.hidden = false;
+    const from = document.getElementById('mem-from');
+    const to = document.getElementById('mem-to');
+    memState.dateFrom = (from && from.value) || '';
+    memState.dateTo = (to && to.value) || '';
+  } else {
+    if (custom) custom.hidden = true;
+    const dates = rangeDates(range);
+    memState.dateFrom = dates.from;
+    memState.dateTo = dates.to;
+  }
+  loadMemories(true);
+}
+
 function bindMemoryPage() {
   const refresh = document.getElementById('btn-memory-refresh');
   if (refresh) refresh.addEventListener('click', () => loadMemories(true));
@@ -610,6 +659,14 @@ function bindMemoryPage() {
 
   const min = document.getElementById('mem-min');
   if (min) min.addEventListener('change', () => { memState.minImportance = Number(min.value) || 0; loadMemories(true); });
+
+  const range = document.getElementById('mem-range');
+  if (range) range.addEventListener('change', () => applyRange(range.value));
+
+  const from = document.getElementById('mem-from');
+  const to = document.getElementById('mem-to');
+  if (from) from.addEventListener('change', () => applyRange('custom'));
+  if (to) to.addEventListener('change', () => applyRange('custom'));
 
   const selftest = document.getElementById('mem-show-selftest');
   if (selftest) selftest.addEventListener('change', () => { memState.includeSelftest = selftest.checked; loadMemories(true); });

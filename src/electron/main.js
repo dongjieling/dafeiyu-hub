@@ -511,6 +511,8 @@ ipcMain.handle('memory:list', (_e, params) => {
     limit: String((params && params.limit) || 30),
     offset: String((params && params.offset) || 0),
     include_selftest: (params && params.include_selftest) ? '1' : '0',
+    date_from: (params && params.date_from) || '',
+    date_to: (params && params.date_to) || '',
   });
   return sidecarGet('/v1/memories?' + q.toString());
 });

@@ -58,6 +58,8 @@ def list_memories(
     kind: str = 'all',
     min_importance: float = 0.0,
     sort: str = 'new',
+    date_from: str = '',
+    date_to: str = '',
 ) -> dict:
     db = _lm_path(cfg)
     if not db.exists():
@@ -99,6 +101,13 @@ def list_memories(
         if min_importance and float(min_importance) > 0:
             clauses.append(f'{IMPORTANCE_EXPR} >= ?')
             cargs.append(float(min_importance))
+        # created_at 可能是 '2026-11-27T10:00:00' 或 '2026-11-27 10:00:00'
+        if date_from:
+            clauses.append("replace(created_at, 'T', ' ') >= ?")
+            cargs.append(f'{date_from} 00:00:00')
+        if date_to:
+            clauses.append("replace(created_at, 'T', ' ') <= ?")
+            cargs.append(f'{date_to} 23:59:59')
 
         where = ' and '.join(clauses)
         total = con.execute(f'select count(*) from documents where {where}', cargs).fetchone()[0]

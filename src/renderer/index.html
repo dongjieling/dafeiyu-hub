@@ -305,6 +305,19 @@
           <option value="new">最新在前</option>
           <option value="important">重要度优先</option>
         </select>
+        <select id="mem-range">
+          <option value="all">全部时间</option>
+          <option value="today">今天</option>
+          <option value="yesterday">昨天</option>
+          <option value="week">本周</option>
+          <option value="month">本月</option>
+          <option value="custom">自定义…</option>
+        </select>
+        <span class="mem-custom" id="mem-custom" hidden>
+          <input type="date" id="mem-from" />
+          <em>至</em>
+          <input type="date" id="mem-to" />
+        </span>
         <select id="mem-min">
           <option value="0">全部重要度</option>
           <option value="0.6">重要 ≥ 0.6</option>

@@ -148,5 +148,39 @@ class MemoryFilterTest(unittest.TestCase):
         self.assertGreaterEqual(res['items'][0]['importance'], res['items'][1]['importance'])
 
 
+class MemoryDateTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix='hub_memd_'))
+        self.mem = fresh_env(self.tmp, ('config', 'crypto', 'memories'))['memories']
+        self.db = self.tmp / 'lm.db'
+        con = sqlite3.connect(self.db)
+        con.executescript(
+            '''
+            create table documents (id integer primary key autoincrement, doc_id text, text text,
+                metadata text, created_at text, updated_at text);
+            create virtual table documents_fts using fts5(search_text, content='', contentless_delete=1, tokenize='unicode61');
+            create table memory_atoms (id integer primary key autoincrement, parent_memory_id integer, content text);
+            create table graph_entries (id integer primary key autoincrement, source_memory_id integer, content text);
+            '''
+        )
+        for i, (text, day) in enumerate([('今天的', '2026-11-27T10:00:00'),
+                                          ('上周的', '2026-11-18T10:00:00'),
+                                          ('上月的', '2026-10-30T10:00:00')], 1):
+            con.execute('insert into documents(doc_id,text,metadata,created_at,updated_at) values(?,?,?,?,?)',
+                        (f'd{i}', text, '{}', day, day))
+        con.commit()
+        con.close()
+        self.cfg = {'lm_db': str(self.db)}
+
+    def test_date_range(self):
+        res = self.mem.list_memories(self.cfg, date_from='2026-11-27', date_to='2026-11-27')
+        self.assertEqual(res['total'], 1)
+        self.assertEqual(res['items'][0]['text'], '今天的')
+
+    def test_open_range(self):
+        res = self.mem.list_memories(self.cfg, date_from='2026-11-19')
+        self.assertEqual(res['total'], 1)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
