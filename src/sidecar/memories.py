@@ -14,6 +14,12 @@ from pathlib import Path
 
 from util import log
 
+SESSION_EXPR = (
+    "coalesce(json_extract(metadata, '$.session_id'), "
+    "json_extract(metadata, '$.adapter_id'), '')"
+)
+IMPORTANCE_EXPR = "coalesce(json_extract(metadata, '$.importance'), 0.0)"
+
 
 def _lm_path(cfg: dict) -> Path:
     raw = (cfg.get('lm_db') or '').strip()
@@ -34,30 +40,75 @@ def _backup(db: Path) -> str:
     return str(dest)
 
 
-def list_memories(cfg: dict, query: str = '', limit: int = 30, offset: int = 0,
-                  include_selftest: bool = False) -> dict:
+def _kind_of(session_id: str) -> str:
+    sid = session_id or ''
+    if 'FriendMessage' in sid:
+        return 'private'
+    if 'GroupMessage' in sid:
+        return 'group'
+    return 'desktop'
+
+
+def list_memories(
+    cfg: dict,
+    query: str = '',
+    limit: int = 40,
+    offset: int = 0,
+    include_selftest: bool = False,
+    kind: str = 'all',
+    min_importance: float = 0.0,
+    sort: str = 'new',
+) -> dict:
     db = _lm_path(cfg)
     if not db.exists():
-        return {'ok': False, 'error': '记忆库不存在', 'items': [], 'total': 0}
-    limit = max(1, min(int(limit or 30), 100))
+        return {'ok': False, 'error': '记忆库不存在', 'items': [], 'total': 0, 'facets': {}}
+    limit = max(1, min(int(limit or 40), 100))
     offset = max(0, int(offset or 0))
     con = sqlite3.connect(f'file:{db}?mode=ro', uri=True, timeout=10)
     con.row_factory = sqlite3.Row
     try:
-        clauses = []
+        base: list[str] = []
         args: list = []
         if not include_selftest:
-            clauses.append("text not like '%SELFTEST-%'")
+            base.append("text not like '%SELFTEST-%'")
         if query.strip():
-            clauses.append('text like ?')
+            base.append('text like ?')
             args.append(f'%{query.strip()}%')
-        where = ('where ' + ' and '.join(clauses)) if clauses else ''
-        total = con.execute(f'select count(*) from documents {where}', args).fetchone()[0]
+        base_sql = (' and '.join(base)) or '1=1'
+
+        # 分类统计（在搜索条件下，不受分类筛选影响）
+        facets = {'all': 0, 'private': 0, 'group': 0, 'desktop': 0}
+        for row in con.execute(
+            f'select {SESSION_EXPR} as sid, count(*) as n from documents where {base_sql} group by sid',
+            args,
+        ):
+            facets[_kind_of(row['sid'])] += row['n']
+        facets['all'] = sum(facets[k] for k in ('private', 'group', 'desktop'))
+
+        clauses = [base_sql]
+        cargs = list(args)
+        if kind in ('private', 'group', 'desktop'):
+            if kind == 'private':
+                clauses.append(f"{SESSION_EXPR} like '%FriendMessage%'")
+            elif kind == 'group':
+                clauses.append(f"{SESSION_EXPR} like '%GroupMessage%'")
+            else:
+                clauses.append(
+                    f"({SESSION_EXPR} not like '%FriendMessage%' and {SESSION_EXPR} not like '%GroupMessage%')"
+                )
+        if min_importance and float(min_importance) > 0:
+            clauses.append(f'{IMPORTANCE_EXPR} >= ?')
+            cargs.append(float(min_importance))
+
+        where = ' and '.join(clauses)
+        total = con.execute(f'select count(*) from documents where {where}', cargs).fetchone()[0]
+        order = f'{IMPORTANCE_EXPR} desc, id desc' if sort == 'important' else 'id desc'
         rows = con.execute(
-            f'select id, doc_id, text, metadata, created_at from documents {where} '
-            'order by id desc limit ? offset ?',
-            (*args, limit, offset),
+            f'select id, doc_id, text, metadata, created_at from documents where {where} '
+            f'order by {order} limit ? offset ?',
+            (*cargs, limit, offset),
         ).fetchall()
+
         items = []
         for r in rows:
             try:
@@ -65,15 +116,26 @@ def list_memories(cfg: dict, query: str = '', limit: int = 30, offset: int = 0,
             except Exception:
                 meta = {}
             text = (r['text'] or '').strip()
+            sid = meta.get('session_id') or meta.get('adapter_id') or ''
             items.append({
                 'id': r['id'],
                 'doc_id': r['doc_id'],
-                'text': text[:300],
+                'text': text,
+                'summary': text[:90].replace('\n', ' '),
                 'importance': meta.get('importance'),
-                'session_id': meta.get('session_id') or meta.get('adapter_id') or '',
+                'session_id': sid,
+                'kind': _kind_of(sid),
                 'created_at': r['created_at'],
+                'key_facts': meta.get('key_facts') or [],
             })
-        return {'ok': True, 'items': items, 'total': total, 'limit': limit, 'offset': offset}
+        return {
+            'ok': True,
+            'items': items,
+            'total': total,
+            'facets': facets,
+            'limit': limit,
+            'offset': offset,
+        }
     finally:
         con.close()
 
@@ -93,7 +155,6 @@ def delete_memory(cfg: dict, doc_id: int) -> dict:
         text = (row['text'] or '')[:40]
         con.execute('begin')
         try:
-            # contentless FTS：contentless_delete=1 支持按 rowid 删除
             con.execute('delete from documents_fts where rowid=?', (row['id'],))
             con.execute('delete from memory_atoms where parent_memory_id=?', (row['id'],))
             con.execute('delete from graph_entries where source_memory_id=?', (row['id'],))

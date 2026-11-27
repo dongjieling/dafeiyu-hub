@@ -107,5 +107,46 @@ class MemoriesTest(unittest.TestCase):
         self.assertFalse(self.mem.delete_memory(self.cfg, 999)['ok'])
 
 
+class MemoryFilterTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix='hub_memf_'))
+        self.mem = fresh_env(self.tmp, ('config', 'crypto', 'memories'))['memories']
+        self.db = self.tmp / 'lm.db'
+        con = sqlite3.connect(self.db)
+        con.executescript(
+            '''
+            create table documents (id integer primary key autoincrement, doc_id text, text text,
+                metadata text, created_at text, updated_at text);
+            create virtual table documents_fts using fts5(search_text, content='', contentless_delete=1, tokenize='unicode61');
+            create table memory_atoms (id integer primary key autoincrement, parent_memory_id integer, content text);
+            create table graph_entries (id integer primary key autoincrement, source_memory_id integer, content text);
+            '''
+        )
+        data = [
+            ('私聊里说的牛肉面', 0.8, '一号:FriendMessage:1'),
+            ('群里聊的辩论赛', 0.4, '一号:GroupMessage:9'),
+            ('桌面宠物说的电影', 0.6, ''),
+        ]
+        for i, (text, imp, sid) in enumerate(data, 1):
+            con.execute(
+                'insert into documents(doc_id,text,metadata,created_at,updated_at) values(?,?,?,?,?)',
+                (f'd{i}', text, json.dumps({'importance': imp, 'session_id': sid}),
+                 '2026-11-27T10:00:00', '2026-11-27T10:00:00'),
+            )
+        con.commit()
+        con.close()
+        self.cfg = {'lm_db': str(self.db)}
+
+    def test_kind_filter_and_facets(self):
+        res = self.mem.list_memories(self.cfg, kind='private')
+        self.assertEqual(res['total'], 1)
+        self.assertEqual(res['facets'], {'all': 3, 'private': 1, 'group': 1, 'desktop': 1})
+
+    def test_min_importance_and_sort(self):
+        res = self.mem.list_memories(self.cfg, min_importance=0.6, sort='important')
+        self.assertEqual(res['total'], 2)
+        self.assertGreaterEqual(res['items'][0]['importance'], res['items'][1]['importance'])
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

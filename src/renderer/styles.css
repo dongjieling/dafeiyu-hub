@@ -976,3 +976,314 @@ body {
   display: block;
   -webkit-line-clamp: unset;
 }
+
+/* ================= 记忆页 v1.2.1 ================= */
+.mem-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.mem-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-card);
+}
+
+.mem-stat strong {
+  font: 600 17px/1.2 "Segoe UI", sans-serif;
+  color: var(--text);
+}
+
+.mem-stat span {
+  font-size: 10.5px;
+  letter-spacing: 0.6px;
+  color: var(--text-faint);
+}
+
+.mem-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.mem-toolbar input[type="search"] {
+  flex: 1 1 240px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--input-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.mem-toolbar input[type="search"]:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.mem-toolbar select {
+  height: 34px;
+  padding: 0 9px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--input-bg);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+}
+
+.mem-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-soft);
+  width: fit-content;
+}
+
+.mem-tab {
+  height: 28px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mem-tab:hover { color: var(--text); }
+
+.mem-tab.active {
+  background: var(--bg-card);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.mem-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.mem-list-wrap { min-width: 0; }
+
+.mem-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mem-group {
+  margin: 14px 0 6px;
+  padding-left: 2px;
+  font-size: 10.5px;
+  letter-spacing: 1px;
+  color: var(--text-faint);
+}
+
+.mem-group:first-child { margin-top: 0; }
+
+.mem-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.mem-item:hover { border-color: var(--line); background: var(--bg-elev); }
+
+.mem-item.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.mem-item-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mem-kind {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  color: var(--text-faint);
+}
+
+.mem-kind.private { color: var(--accent); border-color: var(--accent); }
+.mem-kind.group { color: var(--warn); border-color: var(--warn); }
+.mem-kind.desktop { color: var(--ok); border-color: var(--ok); }
+
+.mem-time {
+  font: 10.5px/1 Consolas, monospace;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.mem-imp {
+  font: 10.5px/1 Consolas, monospace;
+  padding: 2px 6px;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+
+.mem-imp.high { color: var(--bad); background: var(--bad-soft); }
+.mem-imp.mid { color: var(--warn); background: var(--warn-soft); }
+.mem-imp.low { color: var(--text-dim); background: var(--bg-soft); }
+
+.mem-item-text {
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mem-loading,
+.mem-empty {
+  padding: 28px;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+
+.mem-more {
+  display: flex;
+  justify-content: center;
+  padding: 14px 0;
+}
+
+/* 详情面板 */
+.mem-detail {
+  position: sticky;
+  top: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg-card);
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+}
+
+.mem-detail[hidden] { display: none; }
+
+.mem-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+.mem-detail-close {
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.mem-detail-close:hover { color: var(--text); }
+
+.mem-detail-text {
+  font-size: 13px;
+  line-height: 1.85;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mem-detail-meta {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.mem-meta-line {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 10px;
+  font-size: 11.5px;
+  align-items: baseline;
+}
+
+.mem-meta-line span {
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.mem-meta-line strong {
+  color: var(--text-dim);
+  font-weight: 500;
+  font-family: Consolas, monospace;
+  text-align: right;
+  word-break: break-all;
+}
+
+.mem-detail-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.mem-fact {
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line-soft);
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+
+.mem-detail-actions {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+#mem-detail-delete.confirm {
+  border-color: var(--bad);
+  color: var(--bad);
+  background: var(--bad-soft);
+}
+
+@media (max-width: 760px) {
+  .mem-layout { grid-template-columns: 1fr; }
+  .mem-detail { position: static; max-height: none; }
+  .mem-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}

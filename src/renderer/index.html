@@ -285,21 +285,62 @@
       <header class="page-head">
         <div>
           <h1>记忆</h1>
-          <p class="page-sub">她记住的事，可搜索、可删除</p>
+          <p class="page-sub">按时间、来源和重要度看她记住的事</p>
         </div>
         <div class="actions">
           <button class="btn ghost" id="btn-memory-refresh">刷新</button>
         </div>
       </header>
 
-      <div class="mem-toolbar">
-        <input type="search" id="mem-search" placeholder="搜索记忆内容…" />
-        <label class="mem-toggle"><input type="checkbox" id="mem-show-selftest" /> 显示自检记录</label>
-        <span class="field-hint" id="mem-count">—</span>
+      <div class="mem-stats">
+        <div class="mem-stat"><strong id="mem-stat-total">—</strong><span>全部</span></div>
+        <div class="mem-stat"><strong id="mem-stat-private">—</strong><span>私聊</span></div>
+        <div class="mem-stat"><strong id="mem-stat-group">—</strong><span>群聊</span></div>
+        <div class="mem-stat"><strong id="mem-stat-desktop">—</strong><span>桌面</span></div>
       </div>
 
-      <div class="mem-list" id="mem-list"></div>
-      <div class="mem-empty" id="mem-empty" hidden>没有匹配的记忆</div>
+      <div class="mem-toolbar">
+        <input type="search" id="mem-search" placeholder="搜索记忆内容…" />
+        <select id="mem-sort">
+          <option value="new">最新在前</option>
+          <option value="important">重要度优先</option>
+        </select>
+        <select id="mem-min">
+          <option value="0">全部重要度</option>
+          <option value="0.6">重要 ≥ 0.6</option>
+          <option value="0.8">重要 ≥ 0.8</option>
+        </select>
+        <label class="mem-toggle"><input type="checkbox" id="mem-show-selftest" /> 自检</label>
+      </div>
+
+      <div class="mem-tabs" id="mem-tabs">
+        <button class="mem-tab active" data-kind="all">全部</button>
+        <button class="mem-tab" data-kind="private">私聊</button>
+        <button class="mem-tab" data-kind="group">群聊</button>
+        <button class="mem-tab" data-kind="desktop">桌面</button>
+      </div>
+
+      <div class="mem-layout">
+        <div class="mem-list-wrap">
+          <div class="mem-list" id="mem-list"></div>
+          <div class="mem-empty" id="mem-empty" hidden>没有匹配的记忆</div>
+          <div class="mem-more"><button class="btn ghost" id="btn-mem-more" hidden>加载更多</button></div>
+        </div>
+
+        <aside class="mem-detail" id="mem-detail" hidden>
+          <div class="mem-detail-head">
+            <span id="mem-detail-id" class="mono"></span>
+            <button class="mem-detail-close" id="mem-detail-close" title="关闭">×</button>
+          </div>
+          <div class="mem-detail-text" id="mem-detail-text"></div>
+          <div class="mem-detail-meta" id="mem-detail-meta"></div>
+          <div class="mem-detail-facts" id="mem-detail-facts"></div>
+          <div class="mem-detail-actions">
+            <button class="btn" id="mem-detail-delete">删除这条</button>
+            <span class="field-hint" id="mem-detail-status"></span>
+          </div>
+        </aside>
+      </div>
     </section>
 
     <!-- 日志页 -->

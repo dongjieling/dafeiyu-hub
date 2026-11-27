@@ -258,6 +258,9 @@ class Handler(BaseHTTPRequestHandler):
             'limit': int((q.get('limit') or ['30'])[0] or 30),
             'offset': int((q.get('offset') or ['0'])[0] or 0),
             'include_selftest': (q.get('include_selftest') or ['0'])[0] in ('1', 'true'),
+            'kind': (q.get('kind') or ['all'])[0],
+            'min_importance': float((q.get('min_importance') or ['0'])[0] or 0),
+            'sort': (q.get('sort') or ['new'])[0],
         }
 
     def _body_json(self) -> dict:
