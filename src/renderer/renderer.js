@@ -45,19 +45,21 @@ const HELP = {
   status: {
     title: '状态页说明',
     sections: [
-      ['顶部的三个连接', [
-        '本地服务：中转站自己是否在监听 127.0.0.1:8787。',
-        '记忆库：LivingMemory 插件的外部接口是否可用。',
-        '上游模型：DeepSeek 的 Key 是否加载成功。',
+      ['连接', [
+        '本地服务：中转站在 127.0.0.1:{port} 监听，端口可在「配置」页修改。',
+        '记忆库：本地记忆插件的外部接口是否可用，具体地址由插件配置决定。',
+        '上游模型：当前模型 {model} 的 Key 是否加载成功。',
       ]],
       ['诊断', [
-        '自检：写入一条测试记忆，验证 配置 → 记忆库 → 写入 → 检索 → 知识库 整条链路。',
+        '自检：写入一条测试数据，验证 配置 → 记忆库 → 写入 → 检索 整条链路。',
         '流水线：最近几轮对话卡在哪一步，失败时自动展开。',
         '记忆体检：归档条数、记忆文档、原子、图谱节点、无关键词、旧账与死信。',
       ]],
-      ['桌面宠物接入', [
-        '在 AIRI 里选择「OpenAI 兼容」，Base URL 填 http://127.0.0.1:8787/v1，',
-        'API Key 填 local，模型填 deepseek-chat。',
+      ['客户端接入', [
+        '在客户端里选择「OpenAI 兼容」来源，填三项：',
+        'Base URL：http://127.0.0.1:{port}/v1',
+        'API Key：local（随便填，只要不为空）',
+        '模型：{model}（以状态页显示为准）',
       ]],
     ],
   },
@@ -65,8 +67,9 @@ const HELP = {
     title: '参数页说明',
     sections: [
       ['保存与生效', [
-        'AstrBot 插件参数保存在它的配置文件里，保存后需要重载插件才生效。',
+        '插件参数保存在对应插件自己的配置里，保存后需要重载插件才生效。',
         '中转站自身的参数改动需要重启服务。',
+        '不同版本的插件，可调参数可能不同。',
       ]],
     ],
   },
@@ -74,21 +77,21 @@ const HELP = {
     title: '配置页说明',
     sections: [
       ['启动设置', [
-        '端口：默认 8787，被占用时可以改。',
-        'Python 路径：一般指向 AstrBot 内置的 python.exe。',
+        '端口：默认 8787，被占用时可改；改完重启服务。',
+        'Python 路径：指向运行中转站所用的解释器，通常用机器人框架自带的那个。',
       ]],
       ['归档密钥', [
-        '归档内容是加密的，密钥由 Windows 账户保护。',
+        '归档内容加密保存，密钥由当前 Windows 账户保护。',
         '换电脑或重装系统前必须导出，否则旧归档解不开。',
       ]],
       ['归档范围', [
-        '只同步我的私聊 + 指定群：默认，群号填在下面。',
+        '我的私聊 + 指定群：默认；群号填在下方，用逗号分隔。',
         '只同步我的私聊：群聊完全不进归档。',
         '全部：不推荐，群友和他人私聊也会入档。',
         '桌面端对话始终记录，不受这里影响。',
       ]],
       ['记忆编辑', [
-        '开启后可以在「记忆」页删除单条记忆，删除前自动备份。',
+        '开启后可在「记忆」页删除单条记忆，删除前自动备份。',
       ]],
     ],
   },
@@ -97,7 +100,7 @@ const HELP = {
     sections: [
       ['怎么看', [
         '实时输出运行日志，失败行标红。',
-        '排查问题时先看最近一条红色日志，再到状态页看流水线。',
+        '排查时先看最近一条红色日志，再到状态页看流水线。',
       ]],
     ],
   },
@@ -120,12 +123,25 @@ const HELP = {
     title: '关于',
     sections: [
       ['定位', [
-        '本地中转服务，让 QQ 机器人和桌面宠物共享同一套人格与记忆。',
+        '本地中转服务，让聊天机器人和桌面宠物共享同一套人格与记忆。',
         '只监听本机，不向外上传数据。',
+        '具体依赖与版本以实际安装为准。',
       ]],
     ],
   },
 };
+
+function helpContext() {
+  const port = state.cfg?.hubPort ?? 8787;
+  const model = state.health?.data?.upstream_model || '当前上游模型';
+  const persona = state.health?.data?.persona_id || '当前人格';
+  return { port, model, persona };
+}
+
+function fillHelp(text) {
+  const ctx = helpContext();
+  return String(text).replace(/\{(\w+)\}/g, (_, key) => (key in ctx ? String(ctx[key]) : `{${key}}`));
+}
 
 function openHelp(page) {
   const data = HELP[page] || HELP.status;
@@ -142,7 +158,7 @@ function openHelp(page) {
     const ul = document.createElement('ul');
     for (const line of lines) {
       const li = document.createElement('li');
-      li.textContent = line;
+      li.textContent = fillHelp(line);
       ul.appendChild(li);
     }
     body.appendChild(ul);
@@ -200,7 +216,7 @@ function render() {
   if (running && health?.ok) {
     setDot(heroDot, 'on');
     $('#hero-title').textContent = '服务运行中';
-    $('#hero-sub').textContent = 'AIRI 可以连接了';
+    $('#hero-sub').textContent = '客户端可以连接了';
   } else if (running && state.runningSince && Date.now() - state.runningSince < 15000) {
     // 刚启动的 15 秒内不吓人：sidecar 起进程需要时间
     setDot(heroDot, 'warn');

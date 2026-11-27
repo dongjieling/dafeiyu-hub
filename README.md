@@ -26,6 +26,7 @@
 | LivingMemory | 2.14.2 |
 | Electron | 45.4.1 |
 
+以上是验证过的版本组合；实际以你安装的版本为准。
 启动时会做契约检查，不兼容会在状态页明确提示。
 
 ## 它解决什么问题
@@ -63,14 +64,14 @@
 
 | 文件 | 大小 | 链接 |
 |---|---|---|
-| `dafeiyu-hub-1.2.3-portable.exe` | 105.2 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v1.2.3/dafeiyu-hub-1.2.3-portable.exe) |
+| `dafeiyu-hub-1.2.4-portable.exe` | 105.2 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v1.2.4/dafeiyu-hub-1.2.4-portable.exe) |
 
 或在 [Releases 页面](https://github.com/dongjieling/dafeiyu-hub/releases) 选择版本下载。
 
 **放到普通目录**（如 `D:\大肥鱼中转站\`），不要放受限目录，双击运行。
 
 > ⚠️ 未签名 EXE，SmartScreen 可能提示「未知发布者」，选「更多信息 → 仍要运行」。
-> SHA256：`19f6ba4bd7a590ac7bcad2a2d6799ec07351c52d193a7fd6eb4e47d828203917`
+> SHA256：`b7708288f85752d71df735b8cf31dc97c7e24253473653316adf193af00e4d4b`
 
 > ⚠️ 首次运行会提示配置 Python 路径与记忆库地址。
 
@@ -82,15 +83,17 @@
 
 ### 4. 接客户端
 
-**桌面宠物（AIRI）**：设置 → 服务来源 → 聊天 → OpenAI 兼容
+**桌面宠物（如 AIRI）**：设置 → 服务来源 → 聊天 → OpenAI 兼容
 
 ```
-Base URL: http://127.0.0.1:8787/v1
-API Key:  local（任意）
-模型:     deepseek-chat
+Base URL: http://127.0.0.1:<端口>/v1
+API Key:  local（任意，不为空即可）
+模型:     <状态页显示的上游模型>
 ```
 
-**QQ 机器人（AstrBot）**：模型提供商 → OpenAI 兼容，同上。
+> 端口默认 8787，模型名以「状态」页实际显示为准；改过端口就用改后的。
+
+**QQ 机器人（AstrBot）**：模型提供商 → OpenAI 兼容，填写同上。
 
 ### 5. 验证
 
@@ -109,8 +112,8 @@ curl http://127.0.0.1:8787/health
 
 ## 版本
 
-当前版本 **v1.2.3**：契约层重构、人格四层兜底、outbox、E2E 测试、可观测、记忆质量。
-当前版本 **v1.2.3**：契约层重构、人格四层兜底、outbox、E2E 测试、可观测、记忆质量。
+当前版本 **v1.2.4**：契约层重构、人格四层兜底、outbox、E2E 测试、可观测、记忆质量。
+当前版本 **v1.2.4**：契约层重构、人格四层兜底、outbox、E2E 测试、可观测、记忆质量。
 
 ## 文档
 
