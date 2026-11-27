@@ -1584,3 +1584,145 @@ h1, h2, h3, .hero-title, .brand-name, .nav-item, .btn {
 @keyframes toastOut {
   to { opacity: 0; transform: translateY(6px); }
 }
+
+/* ============================================================
+   v1.2.6 布局与字号
+   ============================================================ */
+
+body { font-size: 16px; line-height: 1.7; }
+
+.brand-name { font-size: 19px; letter-spacing: 3px; }
+
+.nav-item {
+  font-size: 15px;
+  padding: 11px 14px;
+}
+
+.nav-item.active { padding-left: 18px; }
+
+.page-head h1 { font-size: 24px; }
+
+.hero {
+  padding: 22px 26px;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.hero .dot { width: 16px; height: 16px; flex-basis: 16px; }
+
+.hero-title { font-size: 22px; letter-spacing: 0.5px; }
+
+.runtime-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.meta-card {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-card);
+}
+
+.meta-card span {
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--text-faint);
+}
+
+.meta-card strong {
+  font: 600 18px/1.3 Consolas, monospace;
+  color: var(--text);
+}
+
+.section-title { margin: 30px 0 14px; }
+
+.section-title h2 { font-size: 13.5px; letter-spacing: 1.5px; }
+
+.light { padding: 16px 18px; }
+.light-head strong { font-size: 15px; }
+.light-body { font-size: 13px; margin-top: 8px; }
+
+.cards { gap: 14px; }
+.card { padding: 16px 18px; }
+.card-label { font-size: 12px; letter-spacing: 0.8px; }
+.card-value { font-size: 15.5px; margin-top: 8px; }
+.mono { font-size: 14px; }
+.small { font-size: 12.5px; }
+
+.btn {
+  height: 36px;
+  padding: 0 16px;
+  font-size: 14px;
+  border-radius: 10px;
+}
+
+.help-btn { width: 32px; height: 32px; flex-basis: 32px; font-size: 14px; }
+
+.panel summary {
+  padding: 15px 18px;
+  font-size: 15px;
+}
+
+.panel-body { padding: 6px 18px 18px; }
+
+.mem-grid { gap: 12px; }
+.mem-item { padding: 12px 14px; }
+.mem-item span { font-size: 11.5px; }
+.mem-item strong { font-size: 14px; }
+
+.param-group { padding: 18px 20px; }
+.param-head strong { font-size: 15px; }
+.param-sub { font-size: 12.5px; }
+.param-label { font-size: 14px; }
+.param-label em { font-size: 12px; }
+.chip { font-size: 11.5px; }
+.param-tip { font-size: 13px; }
+
+.field > span { font-size: 13.5px; }
+.field input[type="text"], .field input[type="number"] { height: 38px; font-size: 14px; }
+.field select { height: 38px; font-size: 14px; }
+
+.logs { font-size: 12.5px; }
+
+.mem-toolbar input[type="search"] { height: 38px; font-size: 14px; }
+.mem-toolbar select { height: 38px; font-size: 13px; }
+.mem-tabs { padding: 4px; }
+.mem-tab { height: 32px; font-size: 13px; padding: 0 16px; }
+.mem-stat strong { font-size: 20px; }
+.mem-stat span { font-size: 11.5px; }
+.mem-item-text { font-size: 13.5px; }
+.mem-time, .mem-imp { font-size: 11.5px; }
+.mem-kind { font-size: 11px; }
+.mem-detail-text { font-size: 14px; }
+.mem-meta-line { font-size: 12.5px; }
+
+.about-block h2 { font-size: 15px; }
+.about-block p, .about-list { font-size: 14px; }
+.about-table { font-size: 13.5px; }
+.about-flow { font-size: 13px; }
+
+.hint { font-size: 13px; }
+
+/* 添加插件按钮 */
+.plugin-add {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+}
+
+#btn-add-plugin {
+  min-width: 140px;
+  font-size: 14px;
+}
+
+/* 折叠的运行数据与连接之间留白 */
+#adv-runtime { margin-top: 6px; }

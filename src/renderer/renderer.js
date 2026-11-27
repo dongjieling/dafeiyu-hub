@@ -256,20 +256,16 @@ function render() {
   if (running && health?.ok) {
     setDot(heroDot, 'on');
     $('#hero-title').textContent = '服务运行中';
-    $('#hero-sub').textContent = '客户端可以连接了';
   } else if (running && state.runningSince && Date.now() - state.runningSince < 15000) {
     // 刚启动的 15 秒内不吓人：sidecar 起进程需要时间
     setDot(heroDot, 'warn');
     $('#hero-title').textContent = '正在启动服务…';
-    $('#hero-sub').textContent = '等待本地服务响应';
   } else if (running) {
     setDot(heroDot, 'warn');
     $('#hero-title').textContent = '服务已启动，但未响应';
-    $('#hero-sub').textContent = health?.error || '正在等待健康检查…';
   } else {
     setDot(heroDot, 'off');
     $('#hero-title').textContent = '服务未启动';
-    $('#hero-sub').textContent = '点击「启动服务」开始';
   }
   document.body.dataset.state = !running ? 'off' : health?.ok ? 'on' : 'warn';
 
@@ -293,11 +289,11 @@ function render() {
 
   const lmOk = Boolean(health?.ok && health.data?.lm_connected);
   setDot($('#light-hub .dot'), lmOk ? 'on' : 'off');
-  $('#light-hub .light-body').textContent = lmOk ? 'LivingMemory 已连接' : 'LivingMemory 未接入';
+  $('#light-hub .light-body').textContent = lmOk ? '记忆库已连接' : '记忆库未接入';
 
   const modelOk = Boolean(health?.ok && health.data?.upstream_key_loaded);
   setDot($('#light-model .dot'), modelOk ? 'on' : 'off');
-  $('#light-model .light-body').textContent = modelOk ? 'DeepSeek Key 已加载' : 'Key 未加载';
+  $('#light-model .light-body').textContent = modelOk ? '上游密钥已加载' : '上游密钥未加载';
 
   // 卡片
   $('#val-addr').textContent = running ? `http://127.0.0.1:${state.cfg?.hubPort ?? 8787}/v1` : '—';
@@ -539,6 +535,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+
+
+// ---------- 打开 AstrBot 插件页 ----------
+const addPluginBtn = document.getElementById('btn-add-plugin');
+if (addPluginBtn) {
+  addPluginBtn.addEventListener('click', () =>
+    withBusy(addPluginBtn, async () => {
+      const res = await window.hub.openAstrBotPlugins();
+      if (!res || res.ok === false) throw new Error((res && res.error) || '无法打开');
+    }, { success: '已打开 AstrBot 插件页' })
+  );
+}
 
 // ---------- 健康检查 ----------
 async function refresh() {

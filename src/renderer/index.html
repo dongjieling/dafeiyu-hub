@@ -10,7 +10,6 @@
   <aside class="sidebar">
     <div class="brand">
       <span class="brand-name">大肥鱼中转站</span>
-      <span class="brand-sub">memory hub</span>
     </div>
 
     <nav class="nav">
@@ -46,20 +45,12 @@
 
       <div class="hero" id="hero">
         <div class="dot" id="hero-dot"></div>
-        <div class="hero-text">
-          <div class="hero-title" id="hero-title">服务未启动</div>
-          <div class="hero-sub" id="hero-sub">点击「启动服务」开始</div>
-        </div>
-        <div class="hero-meta">
-          <div class="hero-meta-item">
-            <span>端口</span>
-            <strong id="hero-port">—</strong>
-          </div>
-          <div class="hero-meta-item">
-            <span>版本</span>
-            <strong id="hero-version">—</strong>
-          </div>
-        </div>
+        <div class="hero-title" id="hero-title">服务未启动</div>
+      </div>
+
+      <div class="runtime-meta">
+        <div class="meta-card"><span>端口</span><strong id="hero-port">—</strong></div>
+        <div class="meta-card"><span>版本</span><strong id="hero-version">—</strong></div>
       </div>
 
       <div class="alerts" id="alerts">
@@ -80,7 +71,7 @@
       </div>
 
       <div class="section-title">
-        <h2>关键连接</h2>
+        <h2>连接</h2>
       </div>
 
       <div class="lights">
@@ -90,19 +81,18 @@
         </div>
         <div class="light" id="light-hub">
           <div class="light-head"><span class="dot"></span><strong>记忆库</strong></div>
-          <div class="light-body">LivingMemory</div>
+          <div class="light-body">未接入</div>
         </div>
         <div class="light" id="light-model">
           <div class="light-head"><span class="dot"></span><strong>上游模型</strong></div>
-          <div class="light-body">DeepSeek</div>
+          <div class="light-body">未加载</div>
         </div>
       </div>
 
-      <div class="section-title">
-        <h2>运行数据</h2>
-      </div>
-
-      <div class="cards">
+      <details class="panel" id="adv-runtime">
+        <summary><span>运行数据</span></summary>
+        <div class="panel-body">
+          <div class="cards">
         <div class="card">
           <div class="card-label">服务地址</div>
           <div class="card-value mono" id="val-addr">—</div>
@@ -116,7 +106,7 @@
           <div class="card-value mono" id="val-model">—</div>
         </div>
         <div class="card">
-          <div class="card-label">Python</div>
+          <div class="card-label">解释器</div>
           <div class="card-value mono small" id="val-python">—</div>
         </div>
         <div class="card">
@@ -132,6 +122,9 @@
           <div class="card-value" id="val-queue">—</div>
         </div>
       </div>
+
+              </div>
+      </details>
 
       <div class="section-title">
         <h2>诊断</h2>
@@ -190,7 +183,17 @@
       </header>
 
       <div id="hub-params" class="param-group"></div>
-      <div id="plugin-params"></div></section>
+
+      <details class="panel" id="plugin-panel">
+        <summary><span>AstrBot 插件</span></summary>
+        <div class="panel-body">
+          <div id="plugin-params"></div>
+          <div class="plugin-add">
+            <button class="btn primary" id="btn-add-plugin" type="button">＋ 添加插件</button>
+          </div>
+        </div>
+      </details>
+    </section>
 
     <!-- 配置页 -->
     <section class="page" id="page-config">

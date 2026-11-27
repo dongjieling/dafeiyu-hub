@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('hub', {
   setArchiveConfig: (patch) => ipcRenderer.invoke('config:archiveSet', patch),
   cleanupTestData: () => ipcRenderer.invoke('selftest:cleanup'),
   patchApply: () => ipcRenderer.invoke('patch:apply'),
+  openAstrBotPlugins: () => ipcRenderer.invoke('astrbot:openPlugins'),
 
   // 参数调整
   params: {

@@ -8,6 +8,7 @@ const http = require('node:http');
 const DEFAULT_CONFIG = {
   pythonPath: 'C:\\Users\\41328\\AppData\\Local\\AstrBot\\backend\\python\\python.exe',
   hubPort: 8787,
+  astrbotPanelUrl: 'http://127.0.0.1:6185',
   autoStartSidecar: true,
 };
 
@@ -519,6 +520,20 @@ ipcMain.handle('memory:list', (_e, params) => {
 ipcMain.handle('memory:delete', (_e, id) => sidecarPostJson('/v1/memories/delete', { id }));
 ipcMain.handle('config:archiveGet', () => sidecarGet('/v1/config/archive'));
 ipcMain.handle('config:archiveSet', (_e, patch) => sidecarPostJson('/v1/config/archive', patch));
+
+
+ipcMain.handle('astrbot:openPlugins', async () => {
+  const base = (config.astrbotPanelUrl || 'http://127.0.0.1:6185').replace(/\/+$/, '');
+  const url = base + '/#/plugin';
+  try {
+    await shell.openExternal(url);
+    log('已打开 AstrBot 插件页: ' + url);
+    return { ok: true, url };
+  } catch (e) {
+    log('打开 AstrBot 插件页失败: ' + e.message);
+    return { ok: false, error: e.message };
+  }
+});
 
 ipcMain.handle('selftest:run', () => sidecarPost('/v1/selftest'));
 ipcMain.handle('selftest:cleanup', () => sidecarPost('/v1/selftest/cleanup'));
