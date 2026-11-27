@@ -36,9 +36,8 @@
       <header class="page-head">
         <div>
           <h1>状态</h1>
-          <p class="page-sub">本地服务、记忆链路与运行数据</p>
         </div>
-        <div class="actions">
+        <div class="actions"><button class="help-btn" data-help="status" title="说明" aria-label="说明">i</button>
           <button class="btn primary" id="btn-start">启动服务</button>
           <button class="btn" id="btn-stop">停止服务</button>
           <button class="btn ghost" id="btn-check">重新检测</button>
@@ -81,7 +80,7 @@
       </div>
 
       <div class="section-title">
-        <h2>三个关键连接</h2>
+        <h2>关键连接</h2>
       </div>
 
       <div class="lights">
@@ -125,23 +124,22 @@
           <div class="card-value mono" id="val-version">—</div>
         </div>
         <div class="card">
-          <div class="card-label">归档（QQ / 桌面）</div>
+          <div class="card-label">归档</div>
           <div class="card-value mono" id="val-archive">—</div>
         </div>
         <div class="card">
-          <div class="card-label">记忆写入队列</div>
+          <div class="card-label">写入队列</div>
           <div class="card-value" id="val-queue">—</div>
         </div>
       </div>
 
       <div class="section-title">
-        <h2>诊断工具</h2>
+        <h2>诊断</h2>
       </div>
 
       <details class="panel" id="adv-selftest">
         <summary>
           <span>连通性自检</span>
-          <em>写入一条测试记忆，验证配置 → 记忆库 → 写入 → 检索 → 知识库</em>
         </summary>
         <div class="panel-body">
           <div class="actions">
@@ -177,14 +175,7 @@
         <div class="panel-body">
           <ul class="pipeline-list" id="pipeline-list"></ul>
         </div>
-      </details>
-
-      <div class="hint">
-        <strong>在 AIRI 里接入：</strong>
-        设置 → 服务来源 → 聊天 → OpenAI 兼容，Base URL 填
-        <code>http://127.0.0.1:8787/v1</code>，API Key 填 <code>local</code>，模型填 <code>deepseek-chat</code>。
-      </div>
-    </section>
+      </details></section>
 
 
     <!-- 参数页 -->
@@ -192,47 +183,38 @@
       <header class="page-head">
         <div>
           <h1>参数</h1>
-          <p class="page-sub">调整记忆读写行为与 AstrBot 插件设置</p>
         </div>
-        <div class="actions">
+        <div class="actions"><button class="help-btn" data-help="params" title="说明" aria-label="说明">i</button>
           <button class="btn ghost" id="btn-params-reload">重新检测</button>
         </div>
       </header>
 
       <div id="hub-params" class="param-group"></div>
-      <div id="plugin-params"></div>
-
-      <div class="hint" style="margin-top:18px">
-        <strong>说明：</strong>
-        插件的参数改动保存在 AstrBot 的配置文件中，保存后需要重载插件才生效；
-        中转站自身的参数改动需要重启服务。
-      </div>
-    </section>
+      <div id="plugin-params"></div></section>
 
     <!-- 配置页 -->
     <section class="page" id="page-config">
       <header class="page-head">
         <div>
           <h1>配置</h1>
-          <p class="page-sub">启动相关设置与数据位置</p>
         </div>
-        <div class="actions">
+        <div class="actions"><button class="help-btn" data-help="config" title="说明" aria-label="说明">i</button>
           <button class="btn primary" id="btn-save">保存</button>
           <button class="btn ghost" id="btn-open-logs">打开数据目录</button>
         </div>
       </header>
 
+      <div class="path-line">配置文件 <code id="cfg-path">—</code></div>
+
       <div class="form">
         <label class="field">
           <span>服务端口</span>
           <input type="number" id="cfg-port" min="1024" max="65535" />
-          <em>默认 8787，改动后需重启服务</em>
         </label>
 
         <label class="field">
           <span>Python 路径</span>
           <input type="text" id="cfg-python" />
-          <em>用于启动 sidecar，一般指向 AstrBot 内置的 python.exe</em>
         </label>
 
         <label class="field checkbox">
@@ -243,11 +225,10 @@
 
       <div class="actions" style="margin: 4px 0 16px">
         <button class="btn" id="btn-export-key" type="button">导出归档密钥</button>
-        <span class="field-hint">换电脑 / 重装系统前必须导出，否则加密的归档解不开</span>
       </div>
 
 
-      <div class="section-title"><h2>归档范围（隐私）</h2></div>
+      <div class="section-title"><h2>归档范围</h2></div>
       <div class="form">
         <label class="field">
           <span>同步哪些会话</span>
@@ -256,12 +237,10 @@
             <option value="private_only">只同步我的私聊</option>
             <option value="all">全部（不推荐）</option>
           </select>
-          <em>只影响 QQ 归档；桌面端对话始终记录</em>
         </label>
         <label class="field">
           <span>白名单群号</span>
           <input type="text" id="cfg-whitelist" placeholder="用逗号分隔，例如 1126415196, 1103135866" />
-          <em>仅在「我的私聊 + 指定群」模式下生效</em>
         </label>
         <label class="field checkbox">
           <input type="checkbox" id="cfg-memory-edit" />
@@ -271,13 +250,7 @@
           <button class="btn primary" id="btn-save-privacy">保存隐私设置</button>
           <span class="field-hint" id="privacy-status"></span>
         </div>
-      </div>
-
-      <div class="hint">
-        <strong>配置文件：</strong><code id="cfg-path">—</code><br />
-        记忆、提炼、知识库等参数在「参数」页调整；这里只放启动相关的设置。
-      </div>
-    </section>
+      </div></section>
 
 
     <!-- 记忆页 -->
@@ -285,9 +258,8 @@
       <header class="page-head">
         <div>
           <h1>记忆</h1>
-          <p class="page-sub">按时间、来源和重要度看她记住的事</p>
         </div>
-        <div class="actions">
+        <div class="actions"><button class="help-btn" data-help="memory" title="说明" aria-label="说明">i</button>
           <button class="btn ghost" id="btn-memory-refresh">刷新</button>
         </div>
       </header>
@@ -315,7 +287,6 @@
         </select>
         <span class="mem-custom" id="mem-custom" hidden>
           <input type="date" id="mem-from" />
-          <em>至</em>
           <input type="date" id="mem-to" />
         </span>
         <select id="mem-min">
@@ -361,9 +332,8 @@
       <header class="page-head">
         <div>
           <h1>日志</h1>
-          <p class="page-sub">实时输出，失败行标红</p>
         </div>
-        <div class="actions">
+        <div class="actions"><button class="help-btn" data-help="logs" title="说明" aria-label="说明">i</button>
           <button class="btn ghost" id="btn-clear">清空</button>
         </div>
       </header>
@@ -375,18 +345,18 @@
       <header class="page-head">
         <div>
           <h1>关于</h1>
-          <p class="page-sub">它做什么、怎么做的、以后做什么</p>
         </div>
+        <div class="actions"><button class="help-btn" data-help="about" title="说明" aria-label="说明">i</button></div>
       </header>
 
       <div class="about-block">
-        <h2>这是什么</h2>
+        <h2>简介</h2>
         <p>一个本地运行的中转服务，让 <strong>QQ 机器人</strong> 和 <strong>桌面宠物</strong> 共享同一套人格与记忆。</p>
         <p>它在两者和模型之间做三件事：注入人格、检索记忆、把新对话存回记忆库。</p>
       </div>
 
       <div class="about-block">
-        <h2>解决什么问题</h2>
+        <h2>解决的问题</h2>
         <table class="about-table">
           <tr><th>没有它</th><th>有它</th></tr>
           <tr><td>QQ 里记得你，桌面上不记得</td><td>两边共享同一份记忆</td></tr>
@@ -397,7 +367,7 @@
       </div>
 
       <div class="about-block">
-        <h2>工作原理</h2>
+        <h2>原理</h2>
         <pre class="about-flow">你说话
   ↓
 中转站 ──→ 检索记忆库（相关记忆）
@@ -411,7 +381,7 @@
       </div>
 
       <div class="about-block">
-        <h2>当前版本</h2>
+        <h2>版本</h2>
         <p><span class="about-ver" id="about-version">v—</span> · 服务端 <span id="about-sidecar">—</span></p>
         <ul class="about-list">
           <li>人格注入、记忆召回、记忆写回、原文归档</li>
@@ -423,7 +393,7 @@
       </div>
 
       <div class="about-block">
-        <h2>接下来</h2>
+        <h2>计划</h2>
         <ul class="about-list">
           <li><strong>v1.1</strong> 记忆浏览与编辑、隐私白名单</li>
           <li><strong>v1.2</strong> MCP 输出（让其他 AI 工具读同一份记忆）</li>
@@ -432,7 +402,7 @@
       </div>
 
       <div class="about-block">
-        <h2>依赖与致谢</h2>
+        <h2>依赖</h2>
         <ul class="about-list">
           <li>AstrBot — 机器人框架（AGPL-3.0）</li>
           <li>LivingMemory — 记忆引擎（AGPL-3.0）</li>
@@ -441,6 +411,16 @@
         </ul>
       </div>
     </section>
+
+    <div class="help-modal" id="help-modal" hidden>
+      <div class="help-card">
+        <div class="help-head">
+          <h2 id="help-title">说明</h2>
+          <button class="help-close" id="help-close" aria-label="关闭">×</button>
+        </div>
+        <div class="help-body" id="help-body"></div>
+      </div>
+    </div>
   </main>
 
   <script src="renderer.js"></script>

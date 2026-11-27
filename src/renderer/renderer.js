@@ -39,6 +39,134 @@ function initTheme() {
 
 initTheme();
 
+
+// ---------- 帮助弹窗 ----------
+const HELP = {
+  status: {
+    title: '状态页说明',
+    sections: [
+      ['顶部的三个连接', [
+        '本地服务：中转站自己是否在监听 127.0.0.1:8787。',
+        '记忆库：LivingMemory 插件的外部接口是否可用。',
+        '上游模型：DeepSeek 的 Key 是否加载成功。',
+      ]],
+      ['诊断', [
+        '自检：写入一条测试记忆，验证 配置 → 记忆库 → 写入 → 检索 → 知识库 整条链路。',
+        '流水线：最近几轮对话卡在哪一步，失败时自动展开。',
+        '记忆体检：归档条数、记忆文档、原子、图谱节点、无关键词、旧账与死信。',
+      ]],
+      ['桌面宠物接入', [
+        '在 AIRI 里选择「OpenAI 兼容」，Base URL 填 http://127.0.0.1:8787/v1，',
+        'API Key 填 local，模型填 deepseek-chat。',
+      ]],
+    ],
+  },
+  params: {
+    title: '参数页说明',
+    sections: [
+      ['保存与生效', [
+        'AstrBot 插件参数保存在它的配置文件里，保存后需要重载插件才生效。',
+        '中转站自身的参数改动需要重启服务。',
+      ]],
+    ],
+  },
+  config: {
+    title: '配置页说明',
+    sections: [
+      ['启动设置', [
+        '端口：默认 8787，被占用时可以改。',
+        'Python 路径：一般指向 AstrBot 内置的 python.exe。',
+      ]],
+      ['归档密钥', [
+        '归档内容是加密的，密钥由 Windows 账户保护。',
+        '换电脑或重装系统前必须导出，否则旧归档解不开。',
+      ]],
+      ['归档范围', [
+        '只同步我的私聊 + 指定群：默认，群号填在下面。',
+        '只同步我的私聊：群聊完全不进归档。',
+        '全部：不推荐，群友和他人私聊也会入档。',
+        '桌面端对话始终记录，不受这里影响。',
+      ]],
+      ['记忆编辑', [
+        '开启后可以在「记忆」页删除单条记忆，删除前自动备份。',
+      ]],
+    ],
+  },
+  logs: {
+    title: '日志页说明',
+    sections: [
+      ['怎么看', [
+        '实时输出运行日志，失败行标红。',
+        '排查问题时先看最近一条红色日志，再到状态页看流水线。',
+      ]],
+    ],
+  },
+  memory: {
+    title: '记忆页说明',
+    sections: [
+      ['筛选', [
+        '时间范围：今天 / 昨天 / 本周 / 本月，或自定义起止日期。',
+        '来源：私聊 / 群聊 / 桌面。',
+        '重要度：0–1，越大越值得长期保留。',
+        '搜索会匹配记忆原文。',
+      ]],
+      ['阅读与删除', [
+        '左侧每条只显示摘要，点一下在右侧看全文和元信息。',
+        '删除需要点两次确认，删除前会自动备份数据库。',
+      ]],
+    ],
+  },
+  about: {
+    title: '关于',
+    sections: [
+      ['定位', [
+        '本地中转服务，让 QQ 机器人和桌面宠物共享同一套人格与记忆。',
+        '只监听本机，不向外上传数据。',
+      ]],
+    ],
+  },
+};
+
+function openHelp(page) {
+  const data = HELP[page] || HELP.status;
+  const modal = document.getElementById('help-modal');
+  const title = document.getElementById('help-title');
+  const body = document.getElementById('help-body');
+  if (!modal || !title || !body) return;
+  title.textContent = data.title;
+  body.innerHTML = '';
+  for (const [heading, lines] of data.sections) {
+    const h = document.createElement('h3');
+    h.textContent = heading;
+    body.appendChild(h);
+    const ul = document.createElement('ul');
+    for (const line of lines) {
+      const li = document.createElement('li');
+      li.textContent = line;
+      ul.appendChild(li);
+    }
+    body.appendChild(ul);
+  }
+  modal.hidden = false;
+}
+
+function closeHelp() {
+  const modal = document.getElementById('help-modal');
+  if (modal) modal.hidden = true;
+}
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.help-btn');
+  if (btn) openHelp(btn.dataset.help);
+  if (e.target.id === 'help-modal') closeHelp();
+});
+
+const helpClose = document.getElementById('help-close');
+if (helpClose) helpClose.addEventListener('click', closeHelp);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeHelp();
+});
+
 // ---------- 页面切换 ----------
 document.querySelectorAll('.nav-item:not(.disabled)').forEach((btn) => {
   btn.addEventListener('click', () => {
@@ -183,8 +311,9 @@ function render() {
     const ob2 = health?.data?.outbox || {};
     const legacy2 = (health?.data?.memory?.archive?.by_status || {}).legacy ?? 0;
     arcEl.textContent = health?.ok
-      ? `${health.data.archive_qq ?? 0} / ${health.data.archive_local ?? 0}${legacy2 ? ` · 旧账 ${legacy2}` : ''}`
+      ? `${health.data.archive_qq ?? 0} / ${health.data.archive_local ?? 0}`
       : '—';
+    arcEl.title = legacy2 ? `旧账 ${legacy2} 条` : '';
   }
   const qEl = document.getElementById('val-queue');
   if (qEl) {
@@ -197,10 +326,11 @@ function render() {
       const pending = (ob.pending ?? 0) + (ob.sending ?? 0);
       const dead = ob.dead ?? 0;
       const failed = ob.failed ?? 0;
-      const parts = [`已写入 ${written}`, `验证 ${verified}`, `待处理 ${pending}`];
+      const parts = [`写入 ${written}`, `待处理 ${pending}`];
       if (dead > 0) parts.push(`死信 ${dead}`);
       else if (failed > 0) parts.push(`失败 ${failed}`);
       qEl.textContent = parts.join(' · ');
+      qEl.title = `已验证 ${verified} 条`;
       qEl.style.color = dead > 0 || failed > 0 ? 'var(--warn)' : '';
     }
   }
