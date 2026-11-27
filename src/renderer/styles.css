@@ -1726,3 +1726,111 @@ body { font-size: 16px; line-height: 1.7; }
 
 /* 折叠的运行数据与连接之间留白 */
 #adv-runtime { margin-top: 6px; }
+
+/* ============================================================
+   v1.2.7 数据字号与颜色统一
+   所有数据值：正常字号 + 正文颜色；标签仍用灰色小字
+   ============================================================ */
+
+.card-value,
+.card-value.mono,
+.mono {
+  font-size: 15.5px;
+  color: var(--text);
+}
+
+.card-value.small {
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.meta-card strong {
+  font-size: 20px;
+  color: var(--text);
+}
+
+.light-body {
+  font-size: 14px;
+  color: var(--text);
+}
+
+/* 记忆列表：时间 / 重要度 / 来源 */
+.mem-time {
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.mem-imp {
+  font-size: 13.5px;
+}
+
+.mem-kind {
+  font-size: 12.5px;
+}
+
+.mem-item-text {
+  font-size: 14.5px;
+}
+
+.mem-item span {
+  font-size: 12.5px;
+}
+
+.mem-item strong {
+  font-size: 16px;
+  color: var(--text);
+}
+
+/* 记忆页统计卡 */
+.mem-stat strong {
+  font-size: 22px;
+  color: var(--text);
+}
+
+.mem-stat span {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* 详情面板 */
+.mem-detail-head {
+  font-size: 13px;
+}
+
+.mem-detail-text {
+  font-size: 14.5px;
+}
+
+.mem-meta-line {
+  font-size: 13.5px;
+}
+
+.mem-meta-line span {
+  color: var(--text-dim);
+}
+
+.mem-meta-line strong {
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.mem-fact {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* 提示类文字也放大一点，但不抢数据主色 */
+.field-hint {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.about-ver {
+  font-size: 15px;
+  color: var(--text);
+}
+
+/* 日志里的数字保持等宽，但不再过小 */
+.logs {
+  font-size: 13px;
+}
