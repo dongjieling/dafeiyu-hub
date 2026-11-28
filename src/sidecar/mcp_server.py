@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import clients as clients_mod  # noqa: E402
 from adapters import LivingMemoryAdapter  # noqa: E402
-from config import CFG  # noqa: E402
+from config import CFG, SIDECAR_VERSION  # noqa: E402
 from memories import list_memories  # noqa: E402
 from persona import read_persona  # noqa: E402
 
@@ -205,7 +205,7 @@ def handle(msg: dict) -> dict | None:
             'result': {
                 'protocolVersion': PROTOCOL_VERSION,
                 'capabilities': {'tools': {}, 'resources': {}},
-                'serverInfo': {'name': 'dafeiyu-memory', 'version': '1.5.1'},
+                'serverInfo': {'name': 'dafeiyu-memory', 'version': SIDECAR_VERSION},
             },
         }
     if method in ('notifications/initialized', 'initialized'):

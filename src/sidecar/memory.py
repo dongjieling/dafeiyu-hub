@@ -755,37 +755,29 @@ def record_extraction(cfg, item, idem, mem_id, status, error, message_id: int | 
 
 # ---------------- 后台任务 ----------------
 def schedule_memory_job(cfg: dict, user_text: str, reply_text: str, trace: str = '') -> None:
+    """先落盘再异步提炼；崩溃后由 turns worker 恢复。"""
     ex = cfg.get('extract') or {}
     enabled = bool(ex.get('enabled', True))
     min_chars = int(ex.get('min_chars') or 6)
 
-    def worker():
-        t_start = time.time()
-        try:
-            mid = archive_message(cfg, 'user', user_text)
-            archive_message(cfg, 'assistant', reply_text)
-            telemetry.record('archive', 'ok', int((time.time() - t_start) * 1000), f'mid={mid}', trace)
+    import turns
 
-            if not enabled or len((user_text or '').strip()) < min_chars:
-                telemetry.record('extract', 'skipped', 0, '太短或未启用', trace)
-                return
-            t_ex = time.time()
-            items = extract(cfg, user_text, reply_text)
-            if items is None:
-                telemetry.record('extract', 'failed', int((time.time() - t_ex) * 1000),
-                                 '解析失败', trace)
-                return
-            telemetry.record('extract', 'ok', int((time.time() - t_ex) * 1000),
-                             f'{len(items)} 条' + ('' if items else '（无需记忆）'), trace)
-            if not items:
-                return
-            queued = write_back(cfg, items, f'airi:msg{mid or int(time.time())}', mid)
-            telemetry.record('enqueue', 'ok' if queued else 'blocked',
-                             int((time.time() - t_start) * 1000), f'{queued} 条', trace)
-        except Exception as e:
-            log(f'记忆任务异常: {e}')
+    try:
+        captured = turns.capture(cfg, user_text, reply_text, trace)
+    except Exception as e:
+        log(f'turn 落盘异常: {str(e)[:100]}')
+        return
+    if not captured:
+        return
+    tid, mid = captured
+    telemetry.record('archive', 'ok', 0, f'mid={mid}', trace)
 
-    threading.Thread(target=worker, daemon=True).start()
+    if not enabled or len((user_text or '').strip()) < min_chars:
+        turns.mark(cfg, tid, 'skipped', '太短或未启用')
+        telemetry.record('extract', 'skipped', 0, '太短或未启用', trace)
+        return
+
+    threading.Thread(target=turns.process_one, args=(cfg, tid), daemon=True).start()
 
 
 def _ensure_extra_columns(db) -> None:

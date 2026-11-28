@@ -12,6 +12,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import json
 import os
 import re
@@ -136,6 +138,51 @@ def validate(data: dict) -> tuple[dict, str]:
     return {'auth_mode': mode, 'clients': clients}, ''
 
 
+@dataclass(frozen=True)
+class ClientContext:
+    """一次请求的客户端上下文；cfg 仍是兼容层，但边界从这里开始。"""
+
+    id: str = 'default'
+    name: str = '默认'
+    token: str = ''
+    scope: str = ''
+    persona_id: str = ''
+    model: str = ''
+    temperature: float = -1.0
+    recall_k: int = 0
+    allow_write: bool = False
+    enabled: bool = True
+
+    @classmethod
+    def from_dict(cls, data: dict) -> 'ClientContext':
+        return cls(
+            id=str(data.get('id') or 'default'),
+            name=str(data.get('name') or '默认'),
+            token=str(data.get('token') or ''),
+            scope=str(data.get('scope') or ''),
+            persona_id=str(data.get('persona_id') or ''),
+            model=str(data.get('model') or ''),
+            temperature=float(data.get('temperature', -1) if data.get('temperature') is not None else -1),
+            recall_k=int(data.get('recall_k') or 0),
+            allow_write=bool(data.get('allow_write', False)),
+            enabled=bool(data.get('enabled', True)),
+        )
+
+    def get(self, key: str, default=None):
+        return getattr(self, key, default)
+
+    def __getitem__(self, key: str):
+        return getattr(self, key)
+
+    def to_dict(self) -> dict:
+        return {
+            'id': self.id, 'name': self.name, 'token': self.token, 'scope': self.scope,
+            'persona_id': self.persona_id, 'model': self.model,
+            'temperature': self.temperature, 'recall_k': self.recall_k,
+            'allow_write': self.allow_write, 'enabled': self.enabled,
+        }
+
+
 def get_client(cid: str) -> dict | None:
     cid = (cid or '').strip().lower()
     for c in load().get('clients') or []:
@@ -144,22 +191,16 @@ def get_client(cid: str) -> dict | None:
     return None
 
 
-def default_client() -> dict:
-    return {
-        'id': 'default',
-        'name': '默认',
-        'token': '',
-        'scope': (CFG.get('write_scope') or CFG.get('scope') or ''),
-        'persona_id': CFG.get('persona_id') or '',
-        'model': '',
-        'temperature': -1,
-        'recall_k': 0,
-        'allow_write': False,
-        'enabled': True,
-    }
+def default_client() -> ClientContext:
+    return ClientContext(
+        id='default',
+        name='默认',
+        scope=(CFG.get('write_scope') or CFG.get('scope') or ''),
+        persona_id=CFG.get('persona_id') or '',
+    )
 
 
-def authenticate(headers) -> tuple[dict | None, str]:
+def authenticate(headers) -> tuple['ClientContext | None', str]:
     """根据请求头识别客户端。返回 (client, error)。"""
     data = load()
     mode = data.get('auth_mode') or 'off'
@@ -174,13 +215,13 @@ def authenticate(headers) -> tuple[dict | None, str]:
                 match = c
                 break
     if match is not None:
-        return match, ''
+        return ClientContext.from_dict(match), ''
 
     # 只有 off 模式允许用 X-Hub-Client 免 token；required/optional 一律要 token
     if mode == 'off' and cid:
         for c in data.get('clients') or []:
             if c.get('id') == cid and c.get('enabled', True):
-                return c, ''
+                return ClientContext.from_dict(c), ''
 
     if mode == 'required':
         return None, '需要客户端 token'

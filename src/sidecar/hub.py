@@ -31,10 +31,10 @@ import outbox
 import persona
 import prompt
 import patch_manager
-import retry
 import scope
 import selftest
 import sync
+import turns
 import telemetry
 from config import CFG, CONFIG_PATH, LOG_PATH, SIDECAR_VERSION
 from upstream import read_upstream
@@ -244,7 +244,7 @@ def set_archive_config(cfg: dict, patch: dict) -> dict:
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
-    server_version = 'DafeiyuHub/' + '0.3'
+    server_version = 'DafeiyuHub/' + SIDECAR_VERSION
 
     def log_message(self, fmt, *args):
         # 健康检查与模型列表每几秒一次，不写日志，避免淹没真实事件
@@ -342,8 +342,8 @@ class Handler(BaseHTTPRequestHandler):
                 'knowledge_kbs': len(kb.get('kb_names') or []),
                 'port': CFG.get('port'),
                 'config_file': str(CONFIG_PATH),
-                'pending_retry': retry.stats(CFG)['pending_retry'],
-                'dead_letters': retry.stats(CFG)['dead_letters'],
+                'pending_retry': (outbox.stats(CFG) or {}).get('failed', 0),
+                'dead_letters': (outbox.stats(CFG) or {}).get('dead', 0),
                 'archive_qq': archive_stats().get('qq', 0),
                 'archive_local': archive_stats().get('local', 0),
                 'qq_last_sync': archive_stats().get('last_sync', 0),
@@ -582,6 +582,7 @@ def main() -> None:
         log(f"启动降级: {report.get('overall')}")
     start_compat_monitor()
     outbox.start(CFG)
+    turns.start(CFG)
     sync.start(CFG)
     port = int(CFG.get('port') or 8787)
     server = ThreadingHTTPServer(('127.0.0.1', port), Handler)
