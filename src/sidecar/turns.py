@@ -32,6 +32,8 @@ def ensure_table(con: sqlite3.Connection) -> None:
              user_text TEXT,
              reply_text TEXT,
              trace TEXT,
+             model TEXT,
+             temperature REAL,
              status TEXT DEFAULT 'pending',
              attempts INTEGER DEFAULT 0,
              next_at REAL,
@@ -40,6 +42,10 @@ def ensure_table(con: sqlite3.Connection) -> None:
              updated_at REAL
            )'''
     )
+    cols = {r[1] for r in con.execute('PRAGMA table_info(turns)')}
+    for name, decl in (('model', 'TEXT'), ('temperature', 'REAL')):
+        if name not in cols:
+            con.execute(f'ALTER TABLE turns ADD COLUMN {name} {decl}')
 
 
 def capture(cfg: dict, user_text: str, reply_text: str, trace: str = '') -> tuple[int, int | None] | None:
@@ -55,8 +61,8 @@ def capture(cfg: dict, user_text: str, reply_text: str, trace: str = '') -> tupl
         now = time.time()
         cur = con.execute(
             'INSERT INTO turns (client_id, scope, persona_id, user_text, reply_text, trace, '
-            ' status, attempts, next_at, created_at, updated_at) '
-            "VALUES (?,?,?,?,?,?,'pending',0,?,?,?)",
+            ' model, temperature, status, attempts, next_at, created_at, updated_at) '
+            "VALUES (?,?,?,?,?,?,?,?,'pending',0,?,?,?)",
             (
                 cfg.get('client_id') or 'default',
                 cfg.get('write_scope') or cfg.get('scope') or '',
@@ -64,6 +70,8 @@ def capture(cfg: dict, user_text: str, reply_text: str, trace: str = '') -> tupl
                 _enc(cfg, user_text or ''),
                 _enc(cfg, reply_text or ''),
                 trace,
+                cfg.get('model') or '',
+                float(cfg.get('temperature') if cfg.get('temperature') is not None else -1),
                 now,
                 now,
                 now,
@@ -123,12 +131,16 @@ def _claim(cfg: dict, tid: int) -> dict | None:
     con.row_factory = sqlite3.Row
     try:
         ensure_table(con)
-        row = con.execute('SELECT * FROM turns WHERE id=?', (tid,)).fetchone()
-        if row is None or row['status'] != 'pending':
+        cur = con.execute(
+            "UPDATE turns SET status='processing', updated_at=? WHERE id=? AND status='pending'",
+            (time.time(), tid),
+        )
+        if cur.rowcount != 1:
+            con.rollback()
             return None
-        con.execute("UPDATE turns SET status='processing', updated_at=? WHERE id=?", (time.time(), tid))
+        row = con.execute('SELECT * FROM turns WHERE id=?', (tid,)).fetchone()
         con.commit()
-        return dict(row)
+        return dict(row) if row else None
     finally:
         con.close()
 
@@ -140,14 +152,45 @@ def process_one(cfg: dict, tid: int) -> str:
     row = _claim(cfg, tid)
     if row is None:
         return 'skip'
-    user_text = _dec(cfg, row['user_text'] or '')
-    reply_text = _dec(cfg, row['reply_text'] or '')
+
+    run_cfg = dict(cfg)
+    cid = (row.get('client_id') or '').strip()
+    if cid:
+        run_cfg['client_id'] = cid
+    scope = (row.get('scope') or '').strip()
+    if scope:
+        run_cfg['write_scope'] = scope
+        run_cfg['scope'] = scope
+    persona = (row.get('persona_id') or '').strip()
+    if persona:
+        run_cfg['persona_id'] = persona
+    model = (row.get('model') or '').strip()
+    if model:
+        run_cfg['model'] = model
+    temp = row.get('temperature')
+    if temp is not None and float(temp) >= 0:
+        run_cfg['temperature'] = float(temp)
+    # 老 turn 没存身份时，尽量从当前 profile 补全
+    if cid and cid != 'default' and not (scope and persona):
+        try:
+            import clients as clients_mod
+
+            profile = clients_mod.get_client(cid)
+            if profile:
+                run_cfg = clients_mod.effective_cfg(run_cfg, profile)
+                if model:
+                    run_cfg['model'] = model
+        except Exception:
+            pass
+
+    user_text = _dec(run_cfg, row['user_text'] or '')
+    reply_text = _dec(run_cfg, row['reply_text'] or '')
     trace = row['trace'] or ''
     try:
         import telemetry
 
         t0 = time.time()
-        items = extract(cfg, user_text, reply_text)
+        items = extract(run_cfg, user_text, reply_text)
         if items is None:
             attempts = int(row['attempts'] or 0) + 1
             if attempts < 3:
@@ -163,7 +206,7 @@ def process_one(cfg: dict, tid: int) -> str:
             return 'skipped'
         mid = row['message_id']
         seed = f'airi:msg{mid}' if mid else f'turn:{tid}'
-        queued = write_back(cfg, items, seed, mid)
+        queued = write_back(run_cfg, items, seed, mid)
         mark(cfg, tid, 'queued' if queued else 'duplicate', '', int(row['attempts'] or 0))
         telemetry.record('enqueue', 'ok' if queued else 'blocked', 0, f'{queued} 条', trace)
         return 'queued' if queued else 'duplicate'
@@ -220,8 +263,46 @@ def recover(cfg: dict) -> int:
         return 0
 
 
+def prune(cfg: dict, days: int = 30) -> int:
+    """清理已完成的 turn，默认保留 30 天。"""
+    db = _db(cfg)
+    if db is None or days <= 0:
+        return 0
+    cutoff = time.time() - days * 86400
+    try:
+        con = sqlite3.connect(db, timeout=10)
+        ensure_table(con)
+        n = con.execute(
+            "DELETE FROM turns WHERE created_at < ? AND status IN ('queued','skipped','duplicate','done')",
+            (cutoff,),
+        ).rowcount
+        con.commit()
+        con.close()
+        return n
+    except Exception:
+        return 0
+
+
+def stats(cfg: dict) -> dict:
+    db = _db(cfg)
+    if db is None:
+        return {}
+    try:
+        con = sqlite3.connect(db, timeout=10)
+        ensure_table(con)
+        rows = con.execute('SELECT status, count(*) FROM turns GROUP BY status').fetchall()
+        con.close()
+        return {k: v for k, v in rows}
+    except Exception:
+        return {}
+
+
 def start(cfg: dict) -> None:
     recover(cfg)
+    try:
+        prune(cfg)
+    except Exception:
+        pass
 
     def loop():
         time.sleep(5)

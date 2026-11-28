@@ -47,6 +47,36 @@ class TurnsTest(unittest.TestCase):
         con.close()
         self.assertEqual(status, 'queued')
 
+    def test_recovery_keeps_client_identity(self):
+        seen = {}
+
+        def fake_extract(cfg, u, r):
+            return [{'content': 'airi 的记忆', 'importance': 0.6}]
+
+        def fake_write(cfg, items, seed, mid=None):
+            seen['cfg'] = cfg
+            return 1
+
+        self.memory.extract = fake_extract
+        self.memory.write_back = fake_write
+        cfg = dict(self.cfg)
+        cfg.update({'client_id': 'airi', 'write_scope': 'airi:desktop',
+                    'scope': 'airi:desktop', 'persona_id': 'p2'})
+        tid, _ = self.turns.capture(cfg, 'airi 说的话', '好')
+        # 模拟 worker 用全局 cfg 恢复
+        self.assertEqual(self.turns.process_one(self.cfg, tid), 'queued')
+        self.assertEqual(seen['cfg']['write_scope'], 'airi:desktop')
+        self.assertEqual(seen['cfg']['persona_id'], 'p2')
+
+    def test_claim_is_atomic(self):
+        self.memory.extract = lambda cfg, u, r: [{'content': '只写一次', 'importance': 0.6}]
+        calls = []
+        self.memory.write_back = lambda cfg, items, seed, mid=None: calls.append(1) or 1
+        tid, _ = self.turns.capture(self.cfg, '测试原子 claim', '好')
+        self.assertEqual(self.turns.process_one(self.cfg, tid), 'queued')
+        self.assertEqual(self.turns.process_one(self.cfg, tid), 'skip')
+        self.assertEqual(len(calls), 1)
+
     def test_empty_is_skipped(self):
         self.memory.extract = lambda cfg, u, r: []
         tid, _ = self.turns.capture(self.cfg, '随便说说', '嗯')

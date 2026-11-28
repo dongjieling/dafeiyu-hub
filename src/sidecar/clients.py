@@ -33,6 +33,15 @@ def _default() -> dict:
 
 def load() -> dict:
     if not PATH.exists():
+        backups = sorted(PATH.parent.glob(PATH.name + '.bak_*'),
+                         key=lambda p: p.stat().st_mtime, reverse=True)[:3]
+        for bak in backups:
+            try:
+                data = json.loads(bak.read_text(encoding='utf-8'))
+                log(f'客户端配置缺失，已从备份恢复: {bak.name}')
+                return _normalize(data)
+            except Exception:
+                continue
         return _default()
     try:
         data = json.loads(PATH.read_text(encoding='utf-8'))

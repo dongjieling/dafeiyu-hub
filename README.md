@@ -64,14 +64,14 @@
 
 | 文件 | 大小 | 链接 |
 |---|---|---|
-| `dafeiyu-hub-1.6.0-portable.exe` | 105.2 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v1.6.0/dafeiyu-hub-1.6.0-portable.exe) |
+| `dafeiyu-hub-1.6.1-portable.exe` | 105.3 MB | [下载](https://github.com/dongjieling/dafeiyu-hub/releases/download/v1.6.1/dafeiyu-hub-1.6.1-portable.exe) |
 
 或在 [Releases 页面](https://github.com/dongjieling/dafeiyu-hub/releases) 选择版本下载。
 
 **放到普通目录**（如 `D:\大肥鱼中转站\`），不要放受限目录，双击运行。
 
 > ⚠️ 未签名 EXE，SmartScreen 可能提示「未知发布者」，选「更多信息 → 仍要运行」。
-> SHA256：`21a5c54f67526970ac493927664958d361bda97f2b9b280286f4f5e99c28a439`
+> SHA256：`21655949acb967d3ce453060b1b4ae573c7d30d5c90472d1e41eaf5b0a137d04`
 
 > ⚠️ 首次运行会提示配置 Python 路径与记忆库地址。
 
@@ -112,8 +112,8 @@ curl http://127.0.0.1:8787/health
 
 ## 版本
 
-当前版本 **v1.6.0**：契约层重构、人格四层兜底、outbox、E2E 测试、可观测、记忆质量。
-当前版本 **v1.6.0**：契约层重构、人格四层兜底、outbox、E2E 测试、可观测、记忆质量。
+当前版本 **v1.6.1**：修 durable turn 恢复路径——恢复时保留客户端身份，原子 claim，models 免鉴权，turns health/prune。
+当前版本 **v1.6.1**：修 durable turn 恢复路径——恢复时保留客户端身份，原子 claim，models 免鉴权，turns health/prune。
 
 ## 文档
 

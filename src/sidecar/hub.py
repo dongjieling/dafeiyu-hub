@@ -290,7 +290,8 @@ class Handler(BaseHTTPRequestHandler):
     # ---------------- GET ----------------
     def _admin_ok(self) -> bool:
         path = self.path.split('?', 1)[0]
-        if path in ('/health', '/healthz') or path.startswith('/v1/chat/completions'):
+        if path in ('/health', '/healthz', '/v1/models', '/models',
+                    '/v1/chat/completions', '/chat/completions'):
             return True
         return admin.check(self.headers.get('X-Hub-Admin'))
 
@@ -344,6 +345,7 @@ class Handler(BaseHTTPRequestHandler):
                 'config_file': str(CONFIG_PATH),
                 'pending_retry': (outbox.stats(CFG) or {}).get('failed', 0),
                 'dead_letters': (outbox.stats(CFG) or {}).get('dead', 0),
+            'turns': turns.stats(CFG),
                 'archive_qq': archive_stats().get('qq', 0),
                 'archive_local': archive_stats().get('local', 0),
                 'qq_last_sync': archive_stats().get('last_sync', 0),
