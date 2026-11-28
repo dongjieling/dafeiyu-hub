@@ -238,6 +238,20 @@
         <span class="field-hint" id="mcp-status"></span>
       </div>
 
+
+      <div class="section-title"><h2>客户端</h2></div>
+      <div class="client-toolbar">
+        <select id="client-auth-mode">
+          <option value="off">不校验 token</option>
+          <option value="optional">有 token 就校验</option>
+          <option value="required">必须带 token</option>
+        </select>
+        <button class="btn" id="btn-client-add" type="button">添加客户端</button>
+        <button class="btn primary" id="btn-clients-save" type="button">保存客户端</button>
+        <span class="field-hint" id="clients-status"></span>
+      </div>
+      <div class="clients-list" id="clients-list"></div>
+
       <div class="section-title"><h2>归档范围</h2></div>
       <div class="form">
         <label class="field">

@@ -23,6 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import memories
 import mcp_register
+import clients
 import memory
 import migrations
 import outbox
@@ -287,6 +288,10 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------------- GET ----------------
     def do_GET(self):
+        if self.path in ('/v1/clients', '/clients'):
+            self._json(200, clients.load())
+            return
+
         if self.path in ('/v1/mcp/status', '/mcp/status'):
             self._json(200, mcp_register.status(CFG))
             return
@@ -365,6 +370,16 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, set_archive_config(CFG, self._body_json()))
             return
 
+        if self.path in ('/v1/clients/save', '/clients/save'):
+            body = self._body_json()
+            data, err = clients.validate(body or {})
+            if err:
+                self._json(400, {'ok': False, 'error': err})
+                return
+            clients.save(data)
+            self._json(200, {'ok': True, **data})
+            return
+
         if self.path in ('/v1/mcp/register', '/mcp/register'):
             self._drain_body()
             self._json(200, mcp_register.register(CFG))
@@ -411,18 +426,25 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {'error': {'message': 'invalid json'}})
             return
 
-        up = read_upstream(CFG)
+        client, auth_error = clients.authenticate(self.headers)
+        if auth_error:
+            telemetry.record('auth', 'denied', 0, auth_error, trace)
+            self._json(401, {'error': {'message': auth_error}})
+            return
+        req_cfg = clients.effective_cfg(CFG, client)
+
+        up = read_upstream(req_cfg)
         if not up['key']:
             self._json(500, {'error': {'message': '未找到上游 API Key（检查 AstrBot 配置路径）'}})
             return
 
-        model = payload.get('model') or up['model']
+        model = (client.get('model') or '').strip() or payload.get('model') or up['model']
         stream = bool(payload.get('stream'))
         from upstream import last_user_text
 
         user_text = last_user_text(payload.get('messages') or [])
 
-        body = {'model': model, 'messages': prompt.build_messages(CFG, payload), 'stream': stream}
+        body = {'model': model, 'messages': prompt.build_messages(req_cfg, payload), 'stream': stream}
         for k in ('temperature', 'top_p', 'max_tokens', 'stop'):
             if k in payload:
                 body[k] = payload[k]
@@ -433,7 +455,8 @@ class Handler(BaseHTTPRequestHandler):
             headers={'Authorization': f"Bearer {up['key']}", 'Content-Type': 'application/json'},
             method='POST',
         )
-        log(f"POST {self.path} stream={stream} model={model} msgs={len(body['messages'])}")
+        log(f"POST {self.path} client={req_cfg.get('client_id')} scope={req_cfg.get('write_scope') or '-'} "
+            f"stream={stream} model={model} msgs={len(body['messages'])}")
 
         try:
             resp = urllib.request.urlopen(
@@ -454,7 +477,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if stream:
-            self._handle_stream(resp, user_text)
+            self._handle_stream(resp, user_text, req_cfg)
             return
 
         data = resp.read()
@@ -473,7 +496,7 @@ class Handler(BaseHTTPRequestHandler):
         telemetry.record('upstream', 'ok', int((time.time() - t0) * 1000),
                          f'model={model} msgs={len(body["messages"])}', trace)
         if user_text and reply:
-            memory.schedule_memory_job(CFG, memory.clean_for_extract(user_text),
+            memory.schedule_memory_job(req_cfg, memory.clean_for_extract(user_text),
                                        memory.clean_for_extract(reply), trace)
 
     def _handle_selftest(self) -> None:
@@ -484,7 +507,7 @@ class Handler(BaseHTTPRequestHandler):
         res = selftest.cleanup(CFG)
         self._json(200, res)
 
-    def _handle_stream(self, resp, user_text: str) -> None:
+    def _handle_stream(self, resp, user_text: str, cfg: dict | None = None) -> None:
         self._trace = getattr(self, "_trace", "")
         self.close_connection = True
         self.send_response(200)
@@ -517,7 +540,7 @@ class Handler(BaseHTTPRequestHandler):
         telemetry.record('upstream_stream', 'ok' if reply else 'empty', 0,
                          f'{len(chunks)} chunks', getattr(self, '_trace', ''))
         if user_text and reply:
-            memory.schedule_memory_job(CFG, memory.clean_for_extract(user_text),
+            memory.schedule_memory_job(cfg or CFG, memory.clean_for_extract(user_text),
                                        memory.clean_for_extract(reply), getattr(self, '_trace', ''))
 
 

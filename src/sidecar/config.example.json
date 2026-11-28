@@ -58,5 +58,6 @@
     "max_messages": 40,
     "max_chars": 24000
   },
-  "astrbot_data_dir": ""
+  "astrbot_data_dir": "",
+  "mcp_client_id": "astrbot"
 }

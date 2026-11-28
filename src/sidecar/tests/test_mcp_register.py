@@ -22,7 +22,7 @@ def fresh_env(tmp: Path, names):
 class McpRegisterTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix='hub_mcpreg_'))
-        self.mods = fresh_env(self.tmp, ('config', 'crypto', 'util', 'mcp_register'))
+        self.mods = fresh_env(self.tmp, ('config', 'crypto', 'util', 'clients', 'mcp_register'))
         self.reg = self.mods['mcp_register']
         self.data = self.tmp / 'astrbot-data'
         self.data.mkdir()
@@ -40,6 +40,7 @@ class McpRegisterTest(unittest.TestCase):
         entry = data['mcpServers']['dafeiyu-memory']
         self.assertTrue(entry['args'][0].endswith('mcp_server.py'))
         self.assertIn('HUB_DATA_DIR', entry['env'])
+        self.assertEqual(entry['env'].get('HUB_CLIENT'), 'astrbot')
         self.assertTrue(res['backup'])
 
     def test_status(self):

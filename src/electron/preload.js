@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('hub', {
   memories: (params) => ipcRenderer.invoke('memory:list', params),
   memoryDelete: (id) => ipcRenderer.invoke('memory:delete', id),
   archiveConfig: () => ipcRenderer.invoke('config:archiveGet'),
+  clientsGet: () => ipcRenderer.invoke('clients:get'),
+  clientsSave: (data) => ipcRenderer.invoke('clients:save', data),
   mcpStatus: () => ipcRenderer.invoke('mcp:status'),
   mcpRegister: () => ipcRenderer.invoke('mcp:register'),
   setArchiveConfig: (patch) => ipcRenderer.invoke('config:archiveSet', patch),

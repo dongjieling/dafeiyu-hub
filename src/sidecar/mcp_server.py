@@ -12,12 +12,14 @@ from __future__ import annotations
 
 import datetime
 import json
+import os
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import clients as clients_mod  # noqa: E402
 from adapters import LivingMemoryAdapter  # noqa: E402
 from config import CFG  # noqa: E402
 from memories import list_memories  # noqa: E402
@@ -80,7 +82,18 @@ def _date_ts(value: str, end: bool = False) -> float | None:
         return None
 
 
+def active_cfg() -> dict:
+    """MCP 也遵守客户端配置：HUB_CLIENT 指定 profile 时用它的 scope/人格。"""
+    cid = (os.environ.get('HUB_CLIENT') or '').strip()
+    if cid:
+        client = clients_mod.get_client(cid)
+        if client:
+            return clients_mod.effective_cfg(CFG, client)
+    return CFG
+
+
 def call_tool(name: str, args: dict) -> dict:
+    cfg = active_cfg()
     if name == 'memory_recall':
         query = str(args.get('query') or '')
         limit = int(args.get('limit') or 5)
@@ -91,17 +104,17 @@ def call_tool(name: str, args: dict) -> dict:
 
             start = start if start is not None else 0.0
             end = end if end is not None else time.time()
-            items = memory_mod.range_memories(CFG, start, end, query=query, limit=limit)
+            items = memory_mod.range_memories(cfg, start, end, query=query, limit=limit)
             texts = [memory_mod._fmt_memory(it) for it in items]
             return {'content': [{'type': 'text', 'text': json.dumps(texts, ensure_ascii=False)}]}
-        items = LivingMemoryAdapter(CFG).recall(
-            query, limit, CFG.get('write_scope') or None
+        items = LivingMemoryAdapter(cfg).recall(
+            query, limit, cfg.get('write_scope') or None
         )
         return {'content': [{'type': 'text', 'text': json.dumps(items, ensure_ascii=False)}]}
 
     if name == 'memory_list':
         res = list_memories(
-            CFG,
+            cfg,
             str(args.get('query') or ''),
             int(args.get('limit') or 20),
             kind=str(args.get('kind') or 'all'),
@@ -112,12 +125,12 @@ def call_tool(name: str, args: dict) -> dict:
         return {'content': [{'type': 'text', 'text': json.dumps(res, ensure_ascii=False)}]}
 
     if name == 'persona_get':
-        return {'content': [{'type': 'text', 'text': read_persona(CFG)}]}
+        return {'content': [{'type': 'text', 'text': read_persona(cfg)}]}
 
     if name == 'memory_health':
         from hub import memory_health
 
-        return {'content': [{'type': 'text', 'text': json.dumps(memory_health(CFG), ensure_ascii=False)}]}
+        return {'content': [{'type': 'text', 'text': json.dumps(memory_health(cfg), ensure_ascii=False)}]}
 
     raise ValueError(f'未知工具: {name}')
 

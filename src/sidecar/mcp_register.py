@@ -11,6 +11,7 @@ import sys
 import time
 from pathlib import Path
 
+import clients as clients_mod
 from config import DATA_DIR
 from util import log
 
@@ -40,6 +41,24 @@ def status(cfg: dict) -> dict:
         return {'ok': False, 'path': str(target), 'registered': False, 'error': str(e)[:80]}
 
 
+def _ensure_client(client_id: str) -> None:
+    """注册 MCP 时确保有一个同名客户端 profile，scope 留空表示用全局。"""
+    data = clients_mod.load()
+    for c in data.get('clients') or []:
+        if c.get('id') == client_id:
+            return
+    data.setdefault('clients', []).append({
+        'id': client_id,
+        'name': 'AstrBot' if client_id == 'astrbot' else client_id,
+        'token': '',
+        'scope': '',
+        'persona_id': '',
+        'model': '',
+        'enabled': True,
+    })
+    clients_mod.save(data)
+
+
 def register(cfg: dict) -> dict:
     target = astrbot_data_dir(cfg) / 'mcp_server.json'
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -56,10 +75,13 @@ def register(cfg: dict) -> dict:
             pass
     servers = data.setdefault('mcpServers', {})
 
+    client_id = (cfg.get('mcp_client_id') or 'astrbot').strip().lower()
+    _ensure_client(client_id)
+
     entry = {
         'command': sys.executable,
         'args': [str(Path(__file__).resolve().parent / 'mcp_server.py')],
-        'env': {'HUB_DATA_DIR': str(DATA_DIR)},
+        'env': {'HUB_DATA_DIR': str(DATA_DIR), 'HUB_CLIENT': client_id},
         'active': True,
     }
     servers[NAME] = entry

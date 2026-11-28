@@ -236,6 +236,7 @@ document.querySelectorAll('.nav-item:not(.disabled)').forEach((btn) => {
       loadParams();
     }
     if (page === 'memory') loadMemories();
+    if (page === 'config') { loadClients(); refreshMcpStatus(); }
   });
 });
 
@@ -1011,6 +1012,122 @@ if (savePrivacyBtn) {
   });
 }
 
+// ---------- 客户端 ----------
+let clientsData = { auth_mode: 'off', clients: [] };
+
+function clientRow(c) {
+  const row = document.createElement('div');
+  row.className = 'client-row';
+
+  const fields = [
+    ['id', 'ID（英文）', c.id || ''],
+    ['name', '名称', c.name || ''],
+    ['scope', 'scope', c.scope || ''],
+    ['persona_id', '人格 ID', c.persona_id || ''],
+    ['model', '模型', c.model || ''],
+  ];
+  for (const [key, placeholder, value] of fields) {
+    const input = document.createElement('input');
+    input.dataset.field = key;
+    input.placeholder = placeholder;
+    input.value = value;
+    row.appendChild(input);
+  }
+
+  const token = document.createElement('input');
+  token.dataset.field = 'token';
+  token.placeholder = 'token（可空）';
+  token.value = c.token || '';
+  token.type = 'password';
+  row.appendChild(token);
+
+  const check = document.createElement('label');
+  check.className = 'client-check';
+  const enabled = document.createElement('input');
+  enabled.type = 'checkbox';
+  enabled.dataset.field = 'enabled';
+  enabled.checked = c.enabled !== false;
+  check.appendChild(enabled);
+  check.appendChild(document.createTextNode('启用'));
+
+  const del = document.createElement('button');
+  del.className = 'client-del';
+  del.textContent = '删除';
+  del.addEventListener('click', () => {
+    row.remove();
+    clientsStatus('已删除一行，记得保存');
+  });
+
+  const wrap = document.createElement('div');
+  wrap.appendChild(check);
+  wrap.appendChild(del);
+  row.appendChild(wrap);
+  return row;
+}
+
+function renderClients(data) {
+  clientsData = data || { auth_mode: 'off', clients: [] };
+  const mode = document.getElementById('client-auth-mode');
+  if (mode) mode.value = clientsData.auth_mode || 'off';
+  const list = document.getElementById('clients-list');
+  if (!list) return;
+  list.innerHTML = '';
+  for (const c of clientsData.clients || []) list.appendChild(clientRow(c));
+  clientsStatus('');
+}
+
+function clientsStatus(text) {
+  const el = document.getElementById('clients-status');
+  if (el) el.textContent = text || '';
+}
+
+async function loadClients() {
+  try {
+    const data = await window.hub.clientsGet();
+    if (data && !data.error) renderClients(data);
+  } catch (e) {
+    clientsStatus('读取失败: ' + e.message);
+  }
+}
+
+function collectClients() {
+  const mode = document.getElementById('client-auth-mode');
+  const rows = document.querySelectorAll('#clients-list .client-row');
+  const clients = [];
+  for (const row of rows) {
+    const item = {};
+    for (const input of row.querySelectorAll('[data-field]')) {
+      const key = input.dataset.field;
+      if (key === 'enabled') item[key] = input.checked;
+      else item[key] = input.value.trim();
+    }
+    if (item.id) clients.push(item);
+  }
+  return { auth_mode: mode ? mode.value : 'off', clients };
+}
+
+const addClientBtn = document.getElementById('btn-client-add');
+if (addClientBtn) {
+  addClientBtn.addEventListener('click', () => {
+    const list = document.getElementById('clients-list');
+    if (!list) return;
+    list.appendChild(clientRow({ id: '', name: '', scope: '', persona_id: '', model: '', token: '', enabled: true }));
+    clientsStatus('已添加一行，填完记得保存');
+  });
+}
+
+const saveClientsBtn = document.getElementById('btn-clients-save');
+if (saveClientsBtn) {
+  saveClientsBtn.addEventListener('click', () =>
+    withBusy(saveClientsBtn, async () => {
+      const data = collectClients();
+      const res = await window.hub.clientsSave(data);
+      if (!res || res.ok === false) throw new Error((res && res.error) || '保存失败');
+      renderClients(res);
+    }, { success: '客户端配置已保存' })
+  );
+}
+
 // ---------- MCP ----------
 async function refreshMcpStatus() {
   try {
@@ -1029,6 +1146,7 @@ if (mcpBtn) {
       const res = await window.hub.mcpRegister();
       if (!res || res.ok === false) throw new Error((res && res.error) || '注册失败');
       await refreshMcpStatus();
+    setTimeout(() => { refreshMcpStatus(); }, 2500);
     }, { success: '已注册到 AstrBot MCP' })
   );
 }
@@ -1055,7 +1173,9 @@ setInterval(() => {
   try {
     await loadConfig();
     await loadArchiveConfig();
+    await loadClients();
     await refreshMcpStatus();
+    setTimeout(() => { refreshMcpStatus(); }, 2500);
     await refresh();
     await refreshPatch();
   } catch (e) {

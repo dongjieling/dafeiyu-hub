@@ -674,13 +674,16 @@ def archive_message(cfg: dict, role: str, content: str) -> int | None:
         with _lock:
             con = sqlite3.connect(db, timeout=10)
             now = time.time()
+            client = (cfg.get('client_id') or '').strip()
+            session_key = f'client:{client}' if client and client != 'default' else 'desktop'
             con.execute(
                 'INSERT OR IGNORE INTO sessions (source, session_key, persona_id, created_at, last_active) '
-                "VALUES ('airi','desktop',?,?,?)",
-                (cfg.get('persona_id') or 'dafeiyu', now, now),
+                "VALUES ('airi',?,?,?,?)",
+                (session_key, cfg.get('persona_id') or 'dafeiyu', now, now),
             )
             sid = con.execute(
-                "SELECT id FROM sessions WHERE source='airi' AND session_key='desktop'"
+                "SELECT id FROM sessions WHERE source='airi' AND session_key=?",
+                (session_key,),
             ).fetchone()[0]
             con.execute('UPDATE sessions SET last_active=? WHERE id=?', (now, sid))
             cur = con.execute(

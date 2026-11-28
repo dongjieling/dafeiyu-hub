@@ -519,6 +519,8 @@ ipcMain.handle('memory:list', (_e, params) => {
 });
 ipcMain.handle('memory:delete', (_e, id) => sidecarPostJson('/v1/memories/delete', { id }));
 ipcMain.handle('config:archiveGet', () => sidecarGet('/v1/config/archive'));
+ipcMain.handle('clients:get', () => sidecarGet('/v1/clients'));
+ipcMain.handle('clients:save', (_e, data) => sidecarPostJson('/v1/clients/save', data));
 ipcMain.handle('mcp:status', () => sidecarGet('/v1/mcp/status'));
 ipcMain.handle('mcp:register', () => sidecarPost('/v1/mcp/register'));
 ipcMain.handle('config:archiveSet', (_e, patch) => sidecarPostJson('/v1/config/archive', patch));

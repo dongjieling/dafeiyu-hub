@@ -76,3 +76,13 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | python mcp_server.py
   }
 }
 ```
+
+## 按客户端隔离
+
+注册时会自动创建 `astrbot` 客户端 profile，并在 MCP 配置里写入：
+
+```json
+"env": { "HUB_DATA_DIR": "...", "HUB_CLIENT": "astrbot" }
+```
+
+MCP 的所有工具会用这个 profile 的 scope 与人格；改「配置 → 客户端」里的 `astrbot` 即可。
