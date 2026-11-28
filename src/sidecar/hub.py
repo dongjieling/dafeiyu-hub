@@ -514,6 +514,10 @@ class Handler(BaseHTTPRequestHandler):
 def main() -> None:
     migration_ok = memory.init_archive(CFG)
     try:
+        memories.cleanup_selftest(CFG)
+    except Exception as e:
+        log(f'清理自检记忆失败: {str(e)[:80]}')
+    try:
         cleaned = memories.cleanup_index(CFG)
         if any(v > 0 for v in cleaned.values() if isinstance(v, int)):
             log(f'记忆索引清理: {cleaned}')

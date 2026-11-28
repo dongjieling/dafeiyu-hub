@@ -60,7 +60,8 @@ def detect_range(text: str, now: float | None = None) -> tuple[float, float] | N
             h = _cn_hour(t)
             if h is None:
                 return (_day_start(d), _at(d, 23, 59))
-            return (_at(d, h), _at(d, h + 2))
+            start_ts = _at(d, h)
+            return (start_ts, start_ts + 2 * 3600)
         except Exception:
             pass
     m = re.search(r'(?<!\d)(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]', t)
@@ -70,7 +71,8 @@ def detect_range(text: str, now: float | None = None) -> tuple[float, float] | N
             h = _cn_hour(t)
             if h is None:
                 return (_day_start(d), _at(d, 23, 59))
-            return (_at(d, h), _at(d, h + 2))
+            start_ts = _at(d, h)
+            return (start_ts, start_ts + 2 * 3600)
         except Exception:
             pass
 
@@ -87,7 +89,8 @@ def detect_range(text: str, now: float | None = None) -> tuple[float, float] | N
                 h = _cn_hour(t)
                 if h is None:
                     return (_day_start(d), _at(d, 23, 59))
-                return (_at(d, h), _at(d, h + 2))
+                start_ts = _at(d, h)
+                return (start_ts, start_ts + 2 * 3600)
             except Exception:
                 pass
 
@@ -151,7 +154,7 @@ def detect_range(text: str, now: float | None = None) -> tuple[float, float] | N
         return (_day_start(prev_start), _day_start(first) - 1)
 
     # 4) 「最近」只在明确指一段时间时触发，避免「最近好吗」被误判
-    if re.search(r'最近\s*(几|这|一|两|段|天|周|月|怎么|如何|过得)', t):
+    if re.search(r'这两天|这几天|最近\s*(几|这|一|两|段|天|周|月|怎么|如何|过得)', t):
         return (now - 7 * 86400, now)
 
     return None

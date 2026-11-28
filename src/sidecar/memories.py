@@ -155,6 +155,47 @@ def list_memories(
         con.close()
 
 
+def cleanup_selftest(cfg: dict) -> int:
+    """删除自检留下的测试记忆（一次备份，级别低于普通删除）。"""
+    db = _lm_path(cfg)
+    if not db.exists():
+        return 0
+    con = sqlite3.connect(db, timeout=20)
+    try:
+        ids = [r[0] for r in con.execute(
+            "select id from documents where text like '%SELFTEST-%'"
+        ).fetchall()]
+        if not ids:
+            return 0
+        _backup(db)
+        con.execute('begin')
+        for doc_id in ids:
+            con.execute('delete from documents_fts where rowid=?', (doc_id,))
+            try:
+                con.execute('delete from livingmemory_memories_fts where rowid=?', (doc_id,))
+            except Exception:
+                pass
+            entry_ids = [r[0] for r in con.execute(
+                'select id from graph_entries where source_memory_id=?', (doc_id,)
+            ).fetchall()]
+            for eid in entry_ids:
+                con.execute('delete from graph_entry_nodes where entry_id=?', (eid,))
+            con.execute('delete from graph_entries where source_memory_id=?', (doc_id,))
+            con.execute('delete from memory_atoms where parent_memory_id=?', (doc_id,))
+            con.execute('delete from memory_sources where memory_id=?', (doc_id,))
+            con.execute('delete from external_api_idempotency where memory_id=?', (doc_id,))
+            con.execute('delete from documents where id=?', (doc_id,))
+        con.commit()
+        log(f'已清理自检记忆: {len(ids)} 条')
+        return len(ids)
+    except Exception as e:
+        con.rollback()
+        log(f'清理自检记忆失败: {str(e)[:80]}')
+        return 0
+    finally:
+        con.close()
+
+
 def cleanup_index(cfg: dict) -> dict:
     """清理没有对应文档的 FTS 幽灵条目（只读扫、可写清）。"""
     db = _lm_path(cfg)
@@ -170,6 +211,27 @@ def cleanup_index(cfg: dict) -> dict:
                     f'delete from {table} where rowid not in (select id from documents)'
                 ).rowcount
                 out[table] = n
+            except Exception:
+                out[table] = -1
+        # 历史删除留下的关系/来源/幂等孤儿
+        try:
+            entry_ids = [r[0] for r in con.execute(
+                'select id from graph_entries where source_memory_id not in (select id from documents)'
+            ).fetchall()]
+            for eid in entry_ids:
+                con.execute('delete from graph_entry_nodes where entry_id=?', (eid,))
+            out['graph_entries'] = len(entry_ids)
+            con.execute('delete from graph_entries where source_memory_id not in (select id from documents)')
+            out['graph_entry_nodes'] = con.execute(
+                'delete from graph_entry_nodes where entry_id not in (select id from graph_entries)'
+            ).rowcount
+        except Exception as e:
+            out['graph'] = str(e)[:60]
+        for table in ('memory_sources', 'external_api_idempotency'):
+            try:
+                out[table] = con.execute(
+                    f'delete from {table} where memory_id not in (select id from documents)'
+                ).rowcount
             except Exception:
                 out[table] = -1
         con.commit()
@@ -203,7 +265,20 @@ def delete_memory(cfg: dict, doc_id: int) -> dict:
             except Exception:
                 pass
             con.execute('delete from memory_atoms where parent_memory_id=?', (row['id'],))
+            entry_ids = [r[0] for r in con.execute(
+                'select id from graph_entries where source_memory_id=?', (row['id'],)
+            ).fetchall()]
+            for eid in entry_ids:
+                con.execute('delete from graph_entry_nodes where entry_id=?', (eid,))
             con.execute('delete from graph_entries where source_memory_id=?', (row['id'],))
+            for sql in (
+                'delete from memory_sources where memory_id=?',
+                'delete from external_api_idempotency where memory_id=?',
+            ):
+                try:
+                    con.execute(sql, (row['id'],))
+                except Exception:
+                    pass
             con.execute('delete from documents where id=?', (row['id'],))
             con.commit()
         except Exception:

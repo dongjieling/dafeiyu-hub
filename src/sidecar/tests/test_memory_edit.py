@@ -69,6 +69,9 @@ class MemoriesTest(unittest.TestCase):
             create table graph_entries (
                 id integer primary key autoincrement, source_memory_id integer, content text
             );
+            create table graph_entry_nodes (entry_id integer, node_id integer);
+            create table memory_sources (memory_id integer, source_json text);
+            create table external_api_idempotency (idempotency_key text, memory_id integer);
             '''
         )
         for i, text in enumerate(['他今天中午吃了牛肉面', '他下周三去辩论赛'], 1):
@@ -79,7 +82,10 @@ class MemoriesTest(unittest.TestCase):
             )
             con.execute('insert into documents_fts(rowid, search_text) values(?,?)', (i, text))
             con.execute('insert into memory_atoms(parent_memory_id, content) values(?,?)', (i, text))
-            con.execute('insert into graph_entries(source_memory_id, content) values(?,?)', (i, text))
+            con.execute('insert into graph_entries(id, source_memory_id, content) values(?,?,?)', (i, i, text))
+            con.execute('insert into graph_entry_nodes(entry_id, node_id) values(?,?)', (i, i))
+            con.execute('insert into memory_sources(memory_id, source_json) values(?,?)', (i, '[]'))
+            con.execute('insert into external_api_idempotency(idempotency_key, memory_id) values(?,?)', (f'k{i}', i))
         con.commit()
         con.close()
         self.cfg = {'lm_db': str(self.db)}
@@ -100,6 +106,9 @@ class MemoriesTest(unittest.TestCase):
         self.assertEqual(con.execute('select count(*) from documents_fts').fetchone()[0], 1)
         self.assertEqual(con.execute('select count(*) from memory_atoms where parent_memory_id=1').fetchone()[0], 0)
         self.assertEqual(con.execute('select count(*) from graph_entries where source_memory_id=1').fetchone()[0], 0)
+        self.assertEqual(con.execute('select count(*) from graph_entry_nodes where entry_id=1').fetchone()[0], 0)
+        self.assertEqual(con.execute('select count(*) from memory_sources where memory_id=1').fetchone()[0], 0)
+        self.assertEqual(con.execute('select count(*) from external_api_idempotency where memory_id=1').fetchone()[0], 0)
         con.close()
         self.assertTrue(Path(res['backup']).exists())
 

@@ -146,6 +146,19 @@ class ScopeAndEventTest(unittest.TestCase):
         self.assertNotIn('他在群里说的', texts)
         self.assertNotIn('别人私聊说的', texts)
 
+    def test_event_hour_from_period_word(self):
+        ts = datetime.datetime(2026, 11, 28, 10, 0).timestamp()
+        ev = self.mem._event_ts('2026-11-27 晚上去了医院', ts)
+        self.assertEqual(datetime.datetime.fromtimestamp(ev).hour, 20)
+
+    def test_narrow_range_tolerance(self):
+        start = datetime.datetime(2026, 11, 27, 22, 0).timestamp()
+        end = datetime.datetime(2026, 11, 28, 0, 0).timestamp()
+        # 记忆写「晚上」（20:00），应与「昨晚十点」的 22-24 区间有交集
+        ev = self.mem._event_ts('2026-11-27 晚上去了医院', start)
+        tol = 2 * 3600
+        self.assertTrue(start - tol <= ev <= end + tol)
+
     def test_event_time_beats_write_time(self):
         start = datetime.datetime(2026, 11, 25, 0, 0).timestamp()
         end = datetime.datetime(2026, 11, 25, 23, 59).timestamp()

@@ -144,20 +144,39 @@ def recall(cfg: dict, query: str) -> list[str]:
     return out
 
 
+_PERIOD_HOURS = (
+    ('凌晨', 2), ('早上', 8), ('上午', 9), ('中午', 12),
+    ('下午', 15), ('傍晚', 18), ('晚上', 20), ('夜里', 22), ('半夜', 0),
+)
+
+
+def _period_hour(text: str) -> int | None:
+    for word, hour in _PERIOD_HOURS:
+        if word in (text or ''):
+            return hour
+    return None
+
+
 _DATE_RE = re.compile(r'(20\d{2})\s*[-年/.]\s*(\d{1,2})\s*[-月/.]\s*(\d{1,2})')
 _MD_RE = re.compile(r'(?<!\d)(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]')
 
 
 def _event_ts(text: str, fallback: float) -> float:
-    """解析事件时间：绝对日期优先；相对时间沿用写入时刻（保留小时）。"""
+    """解析事件时间：绝对日期优先；相对日期 + 时段词也尽量还原到小时。"""
     t = text or ''
-    # 1) 绝对日期 + 可选时间
+    base = datetime.datetime.fromtimestamp(fallback)
+
+    # 1) 绝对日期 +（可选）时刻 / 时段
     m = _DATE_RE.search(t)
     if m:
         hour, minute = 12, 0
         tm = re.search(r'(\d{1,2})\s*[:：]\s*(\d{2})', t)
         if tm:
             hour, minute = int(tm.group(1)), int(tm.group(2))
+        else:
+            ph = _period_hour(t)
+            if ph is not None:
+                hour = ph
         try:
             return datetime.datetime(
                 int(m.group(1)), int(m.group(2)), int(m.group(3)), hour, minute
@@ -168,11 +187,25 @@ def _event_ts(text: str, fallback: float) -> float:
     m = _MD_RE.search(t)
     if m:
         try:
-            base = datetime.datetime.fromtimestamp(fallback)
-            return datetime.datetime(base.year, int(m.group(1)), int(m.group(2)), 12, 0).timestamp()
+            hour = _period_hour(t)
+            return datetime.datetime(
+                base.year, int(m.group(1)), int(m.group(2)), 12 if hour is None else hour, 0
+            ).timestamp()
         except Exception:
             pass
-    # 3) 相对时间：写入时间通常就在事件附近，直接沿用
+    # 3) 相对日期（昨天/昨晚/今天/今晚/前天）+ 时段
+    offset = None
+    if '前天' in t:
+        offset = -2
+    elif '昨天' in t or '昨晚' in t:
+        offset = -1
+    elif '今天' in t or '今晚' in t:
+        offset = 0
+    if offset is not None:
+        d = base + datetime.timedelta(days=offset)
+        hour = _period_hour(t)
+        if hour is not None:
+            return datetime.datetime(d.year, d.month, d.day, hour, 0).timestamp()
     return fallback
 
 
@@ -181,7 +214,7 @@ def _scope_allowed(cfg: dict, session_id: str) -> bool:
     sid = (session_id or '').strip()
     if not sid:
         return False
-    if sid == 'desktop' or sid.startswith('desktop:'):
+    if sid == 'desktop' or sid.endswith(':desktop') or sid.startswith('desktop:'):
         return True
     scope = (cfg.get('write_scope') or cfg.get('scope') or '').strip()
     if not scope:
@@ -295,7 +328,8 @@ def range_memories(cfg: dict, start: float, end: float, query: str = '', limit: 
             continue
         text = r['text'] or ''
         ev = _event_ts(text, fallback)
-        if not (start <= ev <= end):
+        tol = 2 * 3600 if (end - start) <= 12 * 3600 else 0
+        if not (start - tol <= ev <= end + tol):
             continue
         out.append({
             'text': text,
@@ -380,17 +414,17 @@ def parse_extract_json(text: str) -> list:
     import re
 
     if not text or not text.strip():
-        return []
+        return None
     cleaned = _strip_fence(text)
     try:
         data = json.loads(cleaned)
-        return data if isinstance(data, list) else []
+        return data if isinstance(data, list) else None
     except Exception:
         pass
     # 从第一个 [ 开始，尽量救出完整的对象
     start = cleaned.find('[')
     if start == -1:
-        return []
+        return None
     body = cleaned[start:]
     for candidate in (body, body + ']', body[: body.rfind('}') + 1] + ']'):
         try:
@@ -399,7 +433,7 @@ def parse_extract_json(text: str) -> list:
                 return data
         except Exception:
             continue
-    return []
+    return None
 
 
 def extract(cfg: dict, user_text: str, reply_text: str) -> list[dict]:
@@ -435,11 +469,11 @@ def extract(cfg: dict, user_text: str, reply_text: str) -> list[dict]:
             log('提炼返回空内容，跳过本轮')
             return []
         items = parse_extract_json(raw)
+        if items is None:
+            log(f'提炼解析失败，返回片段: {raw[:60]!r}')
+            return None
         if not items:
-            if '[]' in raw.replace(' ', '') or not raw.strip():
-                log('提炼结果为空（本轮没有需要记的内容）')
-            else:
-                log(f'提炼无可解析结果，返回片段: {raw[:60]!r}')
+            log('提炼结果为空（本轮没有需要记的内容）')
             return []
     except Exception as e:
         log(f'提炼失败: {str(e)[:100]}')
@@ -711,6 +745,10 @@ def schedule_memory_job(cfg: dict, user_text: str, reply_text: str, trace: str =
                 return
             t_ex = time.time()
             items = extract(cfg, user_text, reply_text)
+            if items is None:
+                telemetry.record('extract', 'failed', int((time.time() - t_ex) * 1000),
+                                 '解析失败', trace)
+                return
             telemetry.record('extract', 'ok', int((time.time() - t_ex) * 1000),
                              f'{len(items)} 条' + ('' if items else '（无需记忆）'), trace)
             if not items:

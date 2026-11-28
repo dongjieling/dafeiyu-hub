@@ -109,8 +109,8 @@ class ExtractParseTest(unittest.TestCase):
         self.assertEqual(len(self.memory.parse_extract_json(text)), 1)
 
     def test_empty(self):
-        self.assertEqual(self.memory.parse_extract_json(''), [])
-        self.assertEqual(self.memory.parse_extract_json('   '), [])
+        self.assertIsNone(self.memory.parse_extract_json(''))
+        self.assertIsNone(self.memory.parse_extract_json('   '))
 
     def test_truncated(self):
         text = '[{"content":"他今晚有课","importance":0.6,"topics":["学习","课程"]}'
