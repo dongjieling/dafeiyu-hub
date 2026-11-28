@@ -448,6 +448,8 @@ class Handler(BaseHTTPRequestHandler):
         for k in ('temperature', 'top_p', 'max_tokens', 'stop'):
             if k in payload:
                 body[k] = payload[k]
+        if client.get('temperature') is not None and float(client.get('temperature')) >= 0:
+            body['temperature'] = float(client['temperature'])
 
         req = urllib.request.Request(
             up['base'].rstrip('/') + '/chat/completions',

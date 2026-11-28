@@ -64,6 +64,18 @@ class ClientsTest(unittest.TestCase):
         client, err = self.clients.authenticate({'X-Hub-Client': 'airi'})
         self.assertEqual(client['id'], 'airi')
 
+    def test_extended_fields(self):
+        data = self.save('off', [{
+            'id': 'pet', 'temperature': 0.7, 'recall_k': 6, 'allow_write': True,
+        }])
+        self.assertEqual(data['clients'][0]['temperature'], 0.7)
+        self.assertEqual(data['clients'][0]['recall_k'], 6)
+        self.assertTrue(data['clients'][0]['allow_write'])
+        cfg = self.clients.effective_cfg(self.base, data['clients'][0])
+        self.assertEqual(cfg['temperature'], 0.7)
+        self.assertEqual(cfg['recall_k'], 6)
+        self.assertTrue(cfg['allow_write'])
+
     def test_effective_cfg(self):
         client = {'id': 'airi', 'name': 'AIRI', 'scope': 'airi:desktop', 'persona_id': 'p2'}
         cfg = self.clients.effective_cfg(self.base, client)

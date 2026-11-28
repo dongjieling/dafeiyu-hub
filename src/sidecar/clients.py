@@ -51,6 +51,14 @@ def save(data: dict) -> dict:
     return data
 
 
+def _num(value, default: float, lo: float = -1, hi: float = 2) -> float:
+    try:
+        n = float(value)
+    except Exception:
+        return default
+    return max(lo, min(hi, n))
+
+
 def validate(data: dict) -> tuple[dict, str]:
     mode = str(data.get('auth_mode') or 'off')
     if mode not in ('off', 'optional', 'required'):
@@ -77,6 +85,9 @@ def validate(data: dict) -> tuple[dict, str]:
             'scope': str(raw.get('scope') or '').strip()[:120],
             'persona_id': str(raw.get('persona_id') or '').strip()[:60],
             'model': str(raw.get('model') or '').strip()[:60],
+            'temperature': _num(raw.get('temperature'), -1, -1, 2),
+            'recall_k': int(_num(raw.get('recall_k'), 0, 0, 20)),
+            'allow_write': bool(raw.get('allow_write', False)),
             'enabled': bool(raw.get('enabled', True)),
         })
     return {'auth_mode': mode, 'clients': clients}, ''
@@ -98,6 +109,9 @@ def default_client() -> dict:
         'scope': (CFG.get('write_scope') or CFG.get('scope') or ''),
         'persona_id': CFG.get('persona_id') or '',
         'model': '',
+        'temperature': -1,
+        'recall_k': 0,
+        'allow_write': False,
         'enabled': True,
     }
 
@@ -142,6 +156,13 @@ def effective_cfg(base: dict, client: dict) -> dict:
         cfg['persona_id'] = persona
     cfg['client_id'] = client.get('id') or 'default'
     cfg['client_name'] = client.get('name') or '默认'
+    cfg['allow_write'] = bool(client.get('allow_write', False))
+    temp = client.get('temperature')
+    if temp is not None and float(temp) >= 0:
+        cfg['temperature'] = float(temp)
+    recall_k = int(client.get('recall_k') or 0)
+    if recall_k:
+        cfg['recall_k'] = recall_k
     return cfg
 
 

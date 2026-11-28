@@ -41,10 +41,11 @@ class McpTest(unittest.TestCase):
         res = self.send({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {}})
         self.assertEqual(res['result']['protocolVersion'], '2024-11-05')
         self.assertIn('tools', res['result']['capabilities'])
+        self.assertIn('resources', res['result']['capabilities'])
 
         res = self.send({'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list', 'params': {}})
         names = {t['name'] for t in res['result']['tools']}
-        self.assertEqual(names, {'memory_recall', 'memory_list', 'persona_get', 'memory_health'})
+        self.assertEqual(names, {'memory_recall', 'memory_list', 'memory_save', 'persona_get', 'memory_health'})
 
     def test_resources(self):
         res = self.send({'jsonrpc': '2.0', 'id': 10, 'method': 'resources/list', 'params': {}})

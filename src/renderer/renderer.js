@@ -1025,6 +1025,8 @@ function clientRow(c) {
     ['scope', 'scope', c.scope || ''],
     ['persona_id', '人格 ID', c.persona_id || ''],
     ['model', '模型', c.model || ''],
+    ['temperature', '温度（空=默认）', c.temperature >= 0 ? c.temperature : ''],
+    ['recall_k', '召回条数（空=默认）', c.recall_k || ''],
   ];
   for (const [key, placeholder, value] of fields) {
     const input = document.createElement('input');
@@ -1041,14 +1043,19 @@ function clientRow(c) {
   token.type = 'password';
   row.appendChild(token);
 
-  const check = document.createElement('label');
-  check.className = 'client-check';
-  const enabled = document.createElement('input');
-  enabled.type = 'checkbox';
-  enabled.dataset.field = 'enabled';
-  enabled.checked = c.enabled !== false;
-  check.appendChild(enabled);
-  check.appendChild(document.createTextNode('启用'));
+  const checks = document.createElement('div');
+  checks.className = 'client-checks';
+  for (const [key, label] of [['enabled', '启用'], ['allow_write', '允许写入']]) {
+    const check = document.createElement('label');
+    check.className = 'client-check';
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.dataset.field = key;
+    box.checked = key === 'enabled' ? c.enabled !== false : c.allow_write === true;
+    check.appendChild(box);
+    check.appendChild(document.createTextNode(label));
+    checks.appendChild(check);
+  }
 
   const del = document.createElement('button');
   del.className = 'client-del';
@@ -1059,7 +1066,7 @@ function clientRow(c) {
   });
 
   const wrap = document.createElement('div');
-  wrap.appendChild(check);
+  wrap.appendChild(checks);
   wrap.appendChild(del);
   row.appendChild(wrap);
   return row;

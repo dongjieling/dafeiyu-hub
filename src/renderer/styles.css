@@ -1864,7 +1864,7 @@ body { font-size: 16px; line-height: 1.7; }
 
 .client-row {
   display: grid;
-  grid-template-columns: 1.1fr 1fr 1.3fr 1fr 1fr 1.6fr auto;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: 8px;
   align-items: center;
   padding: 10px 12px;
@@ -1909,6 +1909,8 @@ body { font-size: 16px; line-height: 1.7; }
   color: var(--text-dim);
 }
 
-@media (max-width: 1100px) {
-  .client-row { grid-template-columns: 1fr 1fr; }
+.client-checks {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }

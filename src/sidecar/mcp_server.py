@@ -67,6 +67,19 @@ TOOLS = [
         },
     },
     {
+        'name': 'memory_save',
+        'description': '让她记住一条事实。仅当客户端在配置里开启「允许写入」时可用',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'content': {'type': 'string', 'description': '要记住的内容，第一人称或事实描述'},
+                'importance': {'type': 'number', 'default': 0.5},
+                'topics': {'type': 'array', 'items': {'type': 'string'}},
+            },
+            'required': ['content'],
+        },
+    },
+    {
         'name': 'persona_get',
         'description': '读取当前人格设定',
         'inputSchema': {'type': 'object', 'properties': {}},
@@ -132,6 +145,31 @@ def call_tool(name: str, args: dict) -> dict:
             min_importance=float(args.get('min_importance') or 0),
         )
         return {'content': [{'type': 'text', 'text': json.dumps(res, ensure_ascii=False)}]}
+
+    if name == 'memory_save':
+        if not cfg.get('allow_write'):
+            raise ValueError('该客户端未开启写入权限（配置 → 客户端 → 允许写入）')
+        text = str(args.get('content') or '').strip()
+        if len(text) < 4:
+            raise ValueError('内容太短')
+        try:
+            importance = float(args.get('importance') or 0.5)
+        except Exception:
+            importance = 0.5
+        importance = max(0.2, min(0.9, importance))
+        item = {
+            'content': text[:500],
+            'summary': text[:80],
+            'importance': importance,
+            'topics': [str(x)[:20] for x in (args.get('topics') or [])][:6],
+        }
+        import memory as memory_mod
+
+        seed = f"mcp:{cfg.get('client_id') or 'default'}:{int(time.time())}"
+        queued = memory_mod.write_back(cfg, [item], seed)
+        return {'content': [{'type': 'text', 'text': json.dumps(
+            {'ok': queued > 0, 'queued': queued, 'scope': cfg.get('write_scope') or ''},
+            ensure_ascii=False)}]}
 
     if name == 'persona_get':
         return {'content': [{'type': 'text', 'text': read_persona(cfg)}]}
