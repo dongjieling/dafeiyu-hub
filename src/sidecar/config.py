@@ -11,7 +11,7 @@ import os
 import shutil
 from pathlib import Path
 
-SIDECAR_VERSION = os.environ.get('HUB_VERSION') or '1.6.0'
+SIDECAR_VERSION = os.environ.get('HUB_VERSION') or '1.6.1'
 
 BASE_DIR = Path(__file__).parent
 BUNDLED_CONFIG = BASE_DIR / 'config.json'
