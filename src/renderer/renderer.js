@@ -1011,6 +1011,28 @@ if (savePrivacyBtn) {
   });
 }
 
+// ---------- MCP ----------
+async function refreshMcpStatus() {
+  try {
+    const st = await window.hub.mcpStatus();
+    const el = document.getElementById('mcp-status');
+    if (el) el.textContent = st && st.registered ? '已注册（重启 AstrBot 生效）' : '未注册';
+  } catch {
+    /* 忽略 */
+  }
+}
+
+const mcpBtn = document.getElementById('btn-mcp-register');
+if (mcpBtn) {
+  mcpBtn.addEventListener('click', () =>
+    withBusy(mcpBtn, async () => {
+      const res = await window.hub.mcpRegister();
+      if (!res || res.ok === false) throw new Error((res && res.error) || '注册失败');
+      await refreshMcpStatus();
+    }, { success: '已注册到 AstrBot MCP' })
+  );
+}
+
 // ---------- 初始化 ----------
 // 窗口隐藏时降频，避免无意义轮询；先启动，避免初始化异常把轮询一起带走
 setInterval(() => {
@@ -1033,6 +1055,7 @@ setInterval(() => {
   try {
     await loadConfig();
     await loadArchiveConfig();
+    await refreshMcpStatus();
     await refresh();
     await refreshPatch();
   } catch (e) {

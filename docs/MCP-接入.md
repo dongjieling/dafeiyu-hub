@@ -46,3 +46,33 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | python mcp_server.py
 ```
 
 应返回四个工具名。
+
+## 一键注册到 AstrBot
+
+中转站「配置」页底部有 **MCP → 注册到 AstrBot** 按钮：
+
+- 自动把 `dafeiyu-memory` 写入 `%USERPROFILE%\.astrbot\data\mcp_server.json`
+- 保留已有的 MCP 服务器
+- 写入前备份为 `mcp_server.json.bak_<时间戳>`
+- 注册后需要重启 AstrBot 才会加载
+
+注册后的工具会出现在 AstrBot 的 MCP 工具列表里，QQ 侧可以主动调用：
+
+- `memory_recall`：支持 `date_from` / `date_to`，问「昨晚」时可直接查区间
+- `memory_list`：支持 `kind` / 日期 / 重要度过滤
+- `persona_get` / `memory_health`
+
+## 手动配置
+
+```json
+{
+  "mcpServers": {
+    "dafeiyu-memory": {
+      "command": "<python.exe 路径>",
+      "args": ["<sidecar>\\mcp_server.py"],
+      "env": { "HUB_DATA_DIR": "<数据目录>" },
+      "active": true
+    }
+  }
+}
+```

@@ -22,6 +22,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import memories
+import mcp_register
 import memory
 import migrations
 import outbox
@@ -286,6 +287,10 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------------- GET ----------------
     def do_GET(self):
+        if self.path in ('/v1/mcp/status', '/mcp/status'):
+            self._json(200, mcp_register.status(CFG))
+            return
+
         if self.path in ('/v1/config/archive', '/config/archive'):
             self._json(200, archive_config(CFG))
             return
@@ -358,6 +363,11 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path in ('/v1/config/archive', '/config/archive'):
             self._json(200, set_archive_config(CFG, self._body_json()))
+            return
+
+        if self.path in ('/v1/mcp/register', '/mcp/register'):
+            self._drain_body()
+            self._json(200, mcp_register.register(CFG))
             return
 
         if self.path in ('/v1/memories/delete', '/memories/delete'):

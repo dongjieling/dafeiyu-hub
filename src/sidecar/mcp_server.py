@@ -1,20 +1,19 @@
-"""最小的 MCP（stdio）服务：把记忆与人格暴露给其他 AI 客户端。
+"""MCP（stdio）服务：把记忆与人格暴露给 AstrBot / 其他 AI 客户端。
 
 用法（由 MCP 客户端拉起）：
     python mcp_server.py
 
-支持的方法：
-    initialize
-    tools/list
-    tools/call  ->  memory_recall / memory_list / persona_get / memory_health
-
+支持：initialize / tools/list / tools/call
+工具：memory_recall / memory_list / persona_get / memory_health
 只读，不提供写入或删除。
 """
 
 from __future__ import annotations
 
+import datetime
 import json
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -29,24 +28,30 @@ PROTOCOL_VERSION = '2024-11-05'
 TOOLS = [
     {
         'name': 'memory_recall',
-        'description': '按语义召回与查询最相关的长期记忆',
+        'description': '按语义召回长期记忆；可限定日期范围（如「昨晚」就传昨天到今天）',
         'inputSchema': {
             'type': 'object',
             'properties': {
                 'query': {'type': 'string', 'description': '要查询的内容'},
                 'limit': {'type': 'integer', 'default': 5},
+                'date_from': {'type': 'string', 'description': '起始日期 YYYY-MM-DD（可选）'},
+                'date_to': {'type': 'string', 'description': '结束日期 YYYY-MM-DD（可选）'},
             },
             'required': ['query'],
         },
     },
     {
         'name': 'memory_list',
-        'description': '按关键词浏览记忆原文（最新在前）',
+        'description': '按关键词浏览记忆原文，可按来源、日期、重要度过滤',
         'inputSchema': {
             'type': 'object',
             'properties': {
                 'query': {'type': 'string'},
                 'limit': {'type': 'integer', 'default': 20},
+                'kind': {'type': 'string', 'enum': ['all', 'private', 'group', 'desktop']},
+                'date_from': {'type': 'string', 'description': '起始日期 YYYY-MM-DD'},
+                'date_to': {'type': 'string', 'description': '结束日期 YYYY-MM-DD'},
+                'min_importance': {'type': 'number', 'default': 0},
             },
         },
     },
@@ -63,22 +68,57 @@ TOOLS = [
 ]
 
 
+def _date_ts(value: str, end: bool = False) -> float | None:
+    if not value:
+        return None
+    try:
+        d = datetime.datetime.strptime(str(value)[:10], '%Y-%m-%d')
+        if end:
+            d = d + datetime.timedelta(days=1) - datetime.timedelta(seconds=1)
+        return d.timestamp()
+    except Exception:
+        return None
+
+
 def call_tool(name: str, args: dict) -> dict:
     if name == 'memory_recall':
+        query = str(args.get('query') or '')
+        limit = int(args.get('limit') or 5)
+        start = _date_ts(str(args.get('date_from') or ''))
+        end = _date_ts(str(args.get('date_to') or ''), end=True)
+        if start is not None or end is not None:
+            import memory as memory_mod
+
+            start = start if start is not None else 0.0
+            end = end if end is not None else time.time()
+            items = memory_mod.range_memories(CFG, start, end, query=query, limit=limit)
+            texts = [memory_mod._fmt_memory(it) for it in items]
+            return {'content': [{'type': 'text', 'text': json.dumps(texts, ensure_ascii=False)}]}
         items = LivingMemoryAdapter(CFG).recall(
-            str(args.get('query') or ''), int(args.get('limit') or 5), CFG.get('write_scope') or None
+            query, limit, CFG.get('write_scope') or None
         )
         return {'content': [{'type': 'text', 'text': json.dumps(items, ensure_ascii=False)}]}
+
     if name == 'memory_list':
-        res = list_memories(CFG, str(args.get('query') or ''), int(args.get('limit') or 20))
+        res = list_memories(
+            CFG,
+            str(args.get('query') or ''),
+            int(args.get('limit') or 20),
+            kind=str(args.get('kind') or 'all'),
+            date_from=str(args.get('date_from') or ''),
+            date_to=str(args.get('date_to') or ''),
+            min_importance=float(args.get('min_importance') or 0),
+        )
         return {'content': [{'type': 'text', 'text': json.dumps(res, ensure_ascii=False)}]}
+
     if name == 'persona_get':
-        text = read_persona(CFG)
-        return {'content': [{'type': 'text', 'text': text}]}
+        return {'content': [{'type': 'text', 'text': read_persona(CFG)}]}
+
     if name == 'memory_health':
         from hub import memory_health
 
         return {'content': [{'type': 'text', 'text': json.dumps(memory_health(CFG), ensure_ascii=False)}]}
+
     raise ValueError(f'未知工具: {name}')
 
 
@@ -92,7 +132,7 @@ def handle(msg: dict) -> dict | None:
             'result': {
                 'protocolVersion': PROTOCOL_VERSION,
                 'capabilities': {'tools': {}},
-                'serverInfo': {'name': 'dafeiyu-memory', 'version': '1.2.0'},
+                'serverInfo': {'name': 'dafeiyu-memory', 'version': '1.3.0'},
             },
         }
     if method in ('notifications/initialized', 'initialized'):
@@ -101,10 +141,8 @@ def handle(msg: dict) -> dict | None:
         return {'jsonrpc': '2.0', 'id': mid, 'result': {'tools': TOOLS}}
     if method == 'tools/call':
         params = msg.get('params') or {}
-        name = params.get('name') or ''
-        args = params.get('arguments') or {}
         try:
-            result = call_tool(name, args)
+            result = call_tool(params.get('name') or '', params.get('arguments') or {})
             return {'jsonrpc': '2.0', 'id': mid, 'result': result}
         except Exception as e:
             return {
