@@ -53,5 +53,9 @@
     "enabled": true
   },
   "lm_db": "",
-  "memory_edit_enabled": true
+  "memory_edit_enabled": true,
+  "context": {
+    "max_messages": 40,
+    "max_chars": 24000
+  }
 }
