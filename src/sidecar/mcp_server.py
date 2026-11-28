@@ -139,6 +139,7 @@ def call_tool(name: str, args: dict) -> dict:
             cfg,
             str(args.get('query') or ''),
             int(args.get('limit') or 20),
+            scope=cfg.get('write_scope') or '',
             kind=str(args.get('kind') or 'all'),
             date_from=str(args.get('date_from') or ''),
             date_to=str(args.get('date_to') or ''),
@@ -188,7 +189,7 @@ def read_resource(uri: str) -> dict:
         text = read_persona(cfg)
         return {'contents': [{'uri': uri, 'mimeType': 'text/plain', 'text': text}]}
     if uri == 'memory://recent':
-        res = list_memories(cfg, '', 10)
+        res = list_memories(cfg, '', 10, scope=cfg.get('write_scope') or '')
         return {'contents': [{'uri': uri, 'mimeType': 'application/json',
                               'text': json.dumps(res, ensure_ascii=False)}]}
     raise ValueError(f'未知资源: {uri}')
@@ -204,7 +205,7 @@ def handle(msg: dict) -> dict | None:
             'result': {
                 'protocolVersion': PROTOCOL_VERSION,
                 'capabilities': {'tools': {}, 'resources': {}},
-                'serverInfo': {'name': 'dafeiyu-memory', 'version': '1.3.0'},
+                'serverInfo': {'name': 'dafeiyu-memory', 'version': '1.5.1'},
             },
         }
     if method in ('notifications/initialized', 'initialized'):

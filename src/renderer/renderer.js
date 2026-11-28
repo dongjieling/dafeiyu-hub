@@ -1045,7 +1045,7 @@ function clientRow(c) {
 
   const checks = document.createElement('div');
   checks.className = 'client-checks';
-  for (const [key, label] of [['enabled', '启用'], ['allow_write', '允许写入']]) {
+  for (const [key, label] of [['enabled', '启用'], ['allow_write', '允许 MCP 写入']]) {
     const check = document.createElement('label');
     check.className = 'client-check';
     const box = document.createElement('input');

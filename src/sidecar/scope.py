@@ -18,6 +18,7 @@ from pathlib import Path
 from contracts import ContractResult, Severity
 
 PATTERN = re.compile(r'^([^:]+):(FriendMessage|GroupMessage):(.+)$')
+LOCAL_PATTERN = re.compile(r'^[^:]+:desktop$')
 
 
 def parse(value: str):
@@ -54,6 +55,12 @@ def validate(cfg: dict) -> ContractResult:
         return ContractResult(
             name='astrbot.write_scope', ok=False, severity=Severity.DEGRADED,
             source='config', detail='未配置 write_scope，写回已暂停',
+        )
+
+    if raw == 'desktop' or LOCAL_PATTERN.match(raw):
+        return ContractResult(
+            name='astrbot.write_scope', ok=True, severity=Severity.OK,
+            source='local', detail='本地客户端 scope',
         )
 
     parsed = parse(raw)

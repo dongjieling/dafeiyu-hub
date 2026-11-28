@@ -23,6 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import memories
 import mcp_register
+import admin
 import clients
 import memory
 import migrations
@@ -287,9 +288,18 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     # ---------------- GET ----------------
+    def _admin_ok(self) -> bool:
+        path = self.path.split('?', 1)[0]
+        if path in ('/health', '/healthz') or path.startswith('/v1/chat/completions'):
+            return True
+        return admin.check(self.headers.get('X-Hub-Admin'))
+
     def do_GET(self):
+        if not self._admin_ok():
+            self._json(403, {'ok': False, 'error': '需要管理 token（桌面端自动携带）'})
+            return
         if self.path in ('/v1/clients', '/clients'):
-            self._json(200, clients.load())
+            self._json(200, clients.mask(clients.load()))
             return
 
         if self.path in ('/v1/mcp/status', '/mcp/status'):
@@ -366,13 +376,16 @@ class Handler(BaseHTTPRequestHandler):
             pass
 
     def do_POST(self):
+        if not self._admin_ok():
+            self._json(403, {'ok': False, 'error': '需要管理 token（桌面端自动携带）'})
+            return
         if self.path in ('/v1/config/archive', '/config/archive'):
             self._json(200, set_archive_config(CFG, self._body_json()))
             return
 
         if self.path in ('/v1/clients/save', '/clients/save'):
             body = self._body_json()
-            data, err = clients.validate(body or {})
+            data, err = clients.validate(clients.restore_masked(body or {}))
             if err:
                 self._json(400, {'ok': False, 'error': err})
                 return
@@ -547,6 +560,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
+    admin.ensure()
     migration_ok = memory.init_archive(CFG)
     try:
         memories.cleanup_selftest(CFG)

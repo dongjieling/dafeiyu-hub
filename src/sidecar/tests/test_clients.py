@@ -76,6 +76,32 @@ class ClientsTest(unittest.TestCase):
         self.assertEqual(cfg['recall_k'], 6)
         self.assertTrue(cfg['allow_write'])
 
+    def test_required_rejects_id_only(self):
+        self.save('required', [{'id': 'airi', 'token': 't1'}])
+        client, err = self.clients.authenticate({'X-Hub-Client': 'airi'})
+        self.assertIsNone(client)
+        self.assertIn('token', err)
+
+    def test_optional_id_only_is_default(self):
+        self.save('optional', [{'id': 'airi', 'token': 't1'}])
+        client, err = self.clients.authenticate({'X-Hub-Client': 'airi'})
+        self.assertEqual(err, '')
+        self.assertEqual(client['id'], 'default')
+
+    def test_mask_hides_token(self):
+        data = self.save('required', [{'id': 'airi', 'token': 'secret-token'}])
+        masked = self.clients.mask(data)
+        self.assertNotIn('secret-token', masked['clients'][0]['token'])
+        self.assertTrue(masked['clients'][0]['token'].startswith('••••'))
+
+    def test_corrupt_fails_closed(self):
+        path = Path(self.tmp) / 'clients.json'
+        path.write_text('{bad', encoding='utf-8')
+        self.clients.PATH = path
+        data = self.clients.load()
+        self.assertEqual(data['auth_mode'], 'required')
+        self.assertEqual(data['clients'], [])
+
     def test_effective_cfg(self):
         client = {'id': 'airi', 'name': 'AIRI', 'scope': 'airi:desktop', 'persona_id': 'p2'}
         cfg = self.clients.effective_cfg(self.base, client)

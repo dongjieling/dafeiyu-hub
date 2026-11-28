@@ -421,7 +421,7 @@ function sidecarPost(pathname) {
         port: config.hubPort || 8787,
         path: pathname,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': 2 },
+        headers: adminHeaders({ 'Content-Type': 'application/json', 'Content-Length': 2 }),
         timeout: 180000,
       },
       (res) => {
@@ -447,10 +447,21 @@ function sidecarPost(pathname) {
 }
 
 
+function adminHeaders(extra) {
+  const headers = Object.assign({}, extra || {});
+  try {
+    const token = fs.readFileSync(path.join(app.getPath('userData'), 'admin.token'), 'utf8').trim();
+    if (token) headers['X-Hub-Admin'] = token;
+  } catch {
+    /* token 还没生成 */
+  }
+  return headers;
+}
+
 function sidecarGet(pathname) {
   return new Promise((resolve) => {
     const req = http.get(
-      { host: '127.0.0.1', port: config.hubPort || 8787, path: pathname, timeout: 20000 },
+      { host: '127.0.0.1', port: config.hubPort || 8787, path: pathname, timeout: 20000, headers: adminHeaders() },
       (res) => {
         let body = '';
         res.setEncoding('utf8');
@@ -481,7 +492,7 @@ function sidecarPostJson(pathname, payload) {
         port: config.hubPort || 8787,
         path: pathname,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+        headers: adminHeaders({ 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }),
         timeout: 60000,
       },
       (res) => {

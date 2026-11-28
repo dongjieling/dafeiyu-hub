@@ -73,23 +73,37 @@ def enqueue(cfg: dict, item: dict, idem: str, message_id: int | None = None,
         return None
     try:
         con = sqlite3.connect(db, timeout=10)
-        cur = con.execute(
-            'INSERT OR IGNORE INTO extractions '
-            '(message_id, content, importance, idempotency_key, status, error, created_at, '
-            ' retry_count, next_retry_at, attempts, verified_at, topics) '
-            'VALUES (?,?,?,?,?,?,?,0,?,0,NULL,?)',
-            (
-                message_id,
-                _enc_content(cfg, item['content']),
-                item['importance'],
-                idem,
-                status,
-                error,
-                time.time(),
-                time.time(),
-                _enc_content(cfg, json.dumps(item.get('topics') or [], ensure_ascii=False)),
-            ),
+        head = (
+            message_id,
+            _enc_content(cfg, item['content']),
+            item['importance'],
+            idem,
+            status,
+            error,
+            time.time(),
+            time.time(),
+            _enc_content(cfg, json.dumps(item.get('topics') or [], ensure_ascii=False)),
         )
+        try:
+            cur = con.execute(
+                'INSERT OR IGNORE INTO extractions '
+                '(message_id, content, importance, idempotency_key, status, error, created_at, '
+                ' retry_count, next_retry_at, attempts, verified_at, topics, client_id, scope, persona_id) '
+                'VALUES (?,?,?,?,?,?,?,0,?,0,NULL,?,?,?,?)',
+                head + (
+                    cfg.get('client_id') or 'default',
+                    cfg.get('write_scope') or cfg.get('scope') or '',
+                    cfg.get('persona_id') or '',
+                ),
+            )
+        except sqlite3.OperationalError:
+            cur = con.execute(
+                'INSERT OR IGNORE INTO extractions '
+                '(message_id, content, importance, idempotency_key, status, error, created_at, '
+                ' retry_count, next_retry_at, attempts, verified_at, topics) '
+                'VALUES (?,?,?,?,?,?,?,0,?,0,NULL,?)',
+                head,
+            )
         con.commit()
         row_id = cur.lastrowid
         con.close()
@@ -121,12 +135,18 @@ def _send_one(cfg: dict, row: sqlite3.Row, adapter: LivingMemoryAdapter) -> tupl
         topics = json.loads(_dec_content(cfg, row['topics'] or '[]')) or []
     except Exception:
         topics = []
+    def val(key):
+        try:
+            return row[key]
+        except Exception:
+            return None
+
     body = {
         'content': plain,
         'importance': row['importance'],
         'idempotency_key': row['idempotency_key'],
-        'persona_id': cfg.get('persona_id') or 'dafeiyu',
-        'scope': cfg.get('write_scope') or cfg.get('scope') or '',
+        'persona_id': val('persona_id') or cfg.get('persona_id') or 'dafeiyu',
+        'scope': val('scope') or cfg.get('write_scope') or cfg.get('scope') or '',
         'key_facts': [plain],
         'topics': topics,
     }

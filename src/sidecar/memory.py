@@ -532,10 +532,19 @@ def write_back(cfg: dict, items: list[dict], seed: str, message_id: int | None =
         db = _archive_db(cfg)
         if db is not None:
             con = sqlite3.connect(f'file:{db}?mode=ro', uri=True, timeout=5)
-            rows = con.execute(
-                "select content from extractions where status != 'duplicate' "
-                'order by id desc limit 50'
-            ).fetchall()
+            client = cfg.get('client_id') or 'default'
+            try:
+                rows = con.execute(
+                    "select content from extractions where status != 'duplicate' "
+                    "and (client_id=? or (?='default' and client_id is null)) "
+                    'order by id desc limit 50',
+                    (client, client),
+                ).fetchall()
+            except sqlite3.OperationalError:
+                rows = con.execute(
+                    "select content from extractions where status != 'duplicate' "
+                    'order by id desc limit 50'
+                ).fetchall()
             con.close()
             existing.extend(_dec(cfg, r[0]) for r in rows if r[0])
     except Exception as e:
@@ -706,24 +715,38 @@ def record_extraction(cfg, item, idem, mem_id, status, error, message_id: int | 
     try:
         with _lock:
             con = sqlite3.connect(db, timeout=10)
-            con.execute(
-                'INSERT OR IGNORE INTO extractions '
-                '(message_id, content, importance, idempotency_key, lm_memory_id, status, error, '
-                ' created_at, written_at, next_retry_at) '
-                'VALUES (?,?,?,?,?,?,?,?,?,?)',
-                (
-                    message_id,
-                    _enc(cfg, item['content']),
-                    item['importance'],
-                    idem,
-                    mem_id,
-                    status,
-                    error,
-                    time.time(),
-                    time.time() if status == 'written' else None,
-                    time.time() + 60 if status == 'failed' else None,
-                ),
+            base = (
+                message_id,
+                _enc(cfg, item['content']),
+                item['importance'],
+                idem,
+                mem_id,
+                status,
+                error,
+                time.time(),
+                time.time() if status == 'written' else None,
+                time.time() + 60 if status == 'failed' else None,
             )
+            try:
+                con.execute(
+                    'INSERT OR IGNORE INTO extractions '
+                    '(message_id, content, importance, idempotency_key, lm_memory_id, status, error, '
+                    ' created_at, written_at, next_retry_at, client_id, scope, persona_id) '
+                    'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                    base + (
+                        cfg.get('client_id') or 'default',
+                        cfg.get('write_scope') or cfg.get('scope') or '',
+                        cfg.get('persona_id') or '',
+                    ),
+                )
+            except sqlite3.OperationalError:
+                con.execute(
+                    'INSERT OR IGNORE INTO extractions '
+                    '(message_id, content, importance, idempotency_key, lm_memory_id, status, error, '
+                    ' created_at, written_at, next_retry_at) '
+                    'VALUES (?,?,?,?,?,?,?,?,?,?)',
+                    base,
+                )
             con.commit()
             con.close()
     except Exception as e:
@@ -778,6 +801,9 @@ def _ensure_extra_columns(db) -> None:
             ('attempts', 'INTEGER DEFAULT 0'),
             ('verified_at', 'REAL'),
             ('topics', 'TEXT'),
+            ('client_id', 'TEXT'),
+            ('scope', 'TEXT'),
+            ('persona_id', 'TEXT'),
         ):
             if name not in cols:
                 con.execute(f'ALTER TABLE extractions ADD COLUMN {name} {decl}')

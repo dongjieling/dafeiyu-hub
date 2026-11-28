@@ -66,6 +66,7 @@ def list_memories(
     sort: str = 'new',
     date_from: str = '',
     date_to: str = '',
+    scope: str = '',
 ) -> dict:
     db = _lm_path(cfg)
     if not db.exists():
@@ -79,6 +80,10 @@ def list_memories(
         args: list = []
         if not include_selftest:
             base.append("text not like '%SELFTEST-%'")
+        scope = (scope or '').strip()
+        if scope:
+            base.append(f'{SESSION_EXPR} = ?')
+            args.append(scope)
         if query.strip():
             base.append('text like ?')
             args.append(f'%{query.strip()}%')
@@ -225,6 +230,12 @@ def cleanup_index(cfg: dict) -> dict:
             out['graph_entry_nodes'] = con.execute(
                 'delete from graph_entry_nodes where entry_id not in (select id from graph_entries)'
             ).rowcount
+            try:
+                out['graph_edges'] = con.execute(
+                    'delete from graph_edges where source_memory_id not in (select id from documents)'
+                ).rowcount
+            except Exception as e:
+                out['graph_edges'] = str(e)[:40]
         except Exception as e:
             out['graph'] = str(e)[:60]
         for table in ('memory_sources', 'external_api_idempotency'):
@@ -271,6 +282,10 @@ def delete_memory(cfg: dict, doc_id: int) -> dict:
             for eid in entry_ids:
                 con.execute('delete from graph_entry_nodes where entry_id=?', (eid,))
             con.execute('delete from graph_entries where source_memory_id=?', (row['id'],))
+            try:
+                con.execute('delete from graph_edges where source_memory_id=?', (row['id'],))
+            except Exception:
+                pass
             for sql in (
                 'delete from memory_sources where memory_id=?',
                 'delete from external_api_idempotency where memory_id=?',

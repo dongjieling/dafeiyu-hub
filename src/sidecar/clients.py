@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 from pathlib import Path
@@ -33,12 +34,35 @@ def load() -> dict:
         return _default()
     try:
         data = json.loads(PATH.read_text(encoding='utf-8'))
-        data.setdefault('auth_mode', 'off')
-        data.setdefault('clients', [])
-        return data
+        return _normalize(data)
     except Exception as e:
-        log(f'客户端配置读取失败: {str(e)[:80]}')
-        return _default()
+        log(f'客户端配置读取失败，尝试备份: {str(e)[:80]}')
+    # 回退最近一份备份
+    for bak in sorted(PATH.parent.glob(PATH.name + '.bak_*'), key=lambda p: p.stat().st_mtime, reverse=True)[:3]:
+        try:
+            data = json.loads(bak.read_text(encoding='utf-8'))
+            log(f'客户端配置已从备份恢复: {bak.name}')
+            return _normalize(data)
+        except Exception:
+            continue
+    # fail-closed：坏文件不静默变成 off
+    log('客户端配置无法解析，鉴权临时收紧为 required')
+    return {'auth_mode': 'required', 'clients': [], 'error': 'clients.json 损坏'}
+
+
+def _normalize(data: dict) -> dict:
+    if not isinstance(data, dict):
+        return {'auth_mode': 'required', 'clients': [], 'error': '格式错误'}
+    mode = str(data.get('auth_mode') or 'off')
+    if mode not in ('off', 'optional', 'required'):
+        mode = 'required'
+    clients = data.get('clients') if isinstance(data.get('clients'), list) else []
+    for c in clients:
+        c.setdefault('temperature', -1)
+        c.setdefault('recall_k', 0)
+        c.setdefault('allow_write', False)
+        c.setdefault('enabled', True)
+    return {'auth_mode': mode, 'clients': clients}
 
 
 def save(data: dict) -> dict:
@@ -47,7 +71,15 @@ def save(data: dict) -> dict:
             PATH.with_name(f'clients.json.bak_{time.strftime("%Y%m%d%H%M%S")}').write_bytes(PATH.read_bytes())
         except Exception:
             pass
-    PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+        try:
+            for old in sorted(PATH.parent.glob(PATH.name + '.bak_*'),
+                              key=lambda p: p.stat().st_mtime, reverse=True)[5:]:
+                old.unlink(missing_ok=True)
+        except Exception:
+            pass
+    tmp = PATH.with_name(PATH.name + '.tmp')
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+    os.replace(tmp, PATH)
     return data
 
 
@@ -57,6 +89,17 @@ def _num(value, default: float, lo: float = -1, hi: float = 2) -> float:
     except Exception:
         return default
     return max(lo, min(hi, n))
+
+
+def restore_masked(data: dict) -> dict:
+    """UI 回传的掩码 token（••••xxxx）用原值替换。"""
+    old = {c.get('id'): c for c in load().get('clients') or []}
+    for c in data.get('clients') or []:
+        token = str(c.get('token') or '')
+        if token.startswith('••••'):
+            prev = old.get(str(c.get('id') or '').lower()) or {}
+            c['token'] = prev.get('token') or ''
+    return data
 
 
 def validate(data: dict) -> tuple[dict, str]:
@@ -130,18 +173,19 @@ def authenticate(headers) -> tuple[dict | None, str]:
             if c.get('token') and c['token'] == token and c.get('enabled', True):
                 match = c
                 break
-    if match is None and cid:
-        for c in data.get('clients') or []:
-            if c.get('id') == cid and c.get('enabled', True):
-                match = c
-                break
-
     if match is not None:
         return match, ''
+
+    # 只有 off 模式允许用 X-Hub-Client 免 token；required/optional 一律要 token
+    if mode == 'off' and cid:
+        for c in data.get('clients') or []:
+            if c.get('id') == cid and c.get('enabled', True):
+                return c, ''
+
     if mode == 'required':
         return None, '需要客户端 token'
-    if mode == 'optional' and (token or cid):
-        return None, '客户端 token 或 id 无效'
+    if mode == 'optional' and token:
+        return None, '客户端 token 无效'
     return default_client(), ''
 
 
