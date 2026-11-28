@@ -1,6 +1,6 @@
 {
   "name": "dafeiyu-hub",
-  "version": "1.2.8",
+  "version": "1.2.9",
   "description": "大肥鱼中转站 —— 让 QQ 与桌宠共享人格与记忆",
   "main": "electron/main.js",
   "author": "",

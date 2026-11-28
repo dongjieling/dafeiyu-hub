@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import json
 import sqlite3
 import ssl
@@ -15,6 +16,7 @@ import crypto
 import migrations
 import quality
 import telemetry
+import timeparse
 import scope
 from config import data_path
 from upstream import read_upstream
@@ -31,14 +33,15 @@ EXTRACT_PROMPT = """从下面这轮对话里提取值得长期记住的信息（
 
 **具体事件必须单独成条，不能被习惯概括吞掉。**
 
-- 他说"我今天中午又吃的便利店" → 记 "他2026-11-25中午又吃了便利店"（具体）
+- 他说"我今天中午又吃的便利店"（今天是 {today}）→ 记 "他 {today} 中午又吃了便利店"（具体）
 - 不要写成 "他经常吃便利店"（概括会把"今天"这个时间点丢掉）
 - 如果既发生了具体事件、又能看出习惯，优先记具体事件
 
 每条要求：
 - 不超过 40 字
 - 用第三人称写（"他说……""他喜欢……"）
-- 有时间点就写时间（今天/昨天/日期）
+- 时间一律写绝对日期（如 2026-11-25），不要写“今天 / 昨天 / 昨晚”；原话没有日期就按今天 {today} 换算
+- 只记他这一轮亲口说过的事实；她回忆里的旧事不是新事实，不能写成“昨天……”
 - 附两个分数（0-1）：
   - `importance`：这条信息对他有多重要（丢了对理解他有影响吗）
   - `stability`：多稳定（长期偏好/关系给高分，一次性事件给低分）
@@ -140,6 +143,126 @@ def recall(cfg: dict, query: str) -> list[str]:
     return out
 
 
+def _today_str() -> str:
+    return datetime.datetime.now().strftime('%Y-%m-%d')
+
+
+def _lm_db_path(cfg: dict) -> Path:
+    raw = (cfg.get('lm_db') or '').strip()
+    if raw:
+        return Path(raw)
+    return Path.home() / '.astrbot' / 'data' / 'plugin_data' / 'astrbot_plugin_livingmemory' / 'livingmemory.db'
+
+
+def recall_detailed(cfg: dict, query: str, k: int = 16) -> list[dict]:
+    """和 recall 相同的召回，但保留时间、分数等字段。"""
+    key = cfg.get('lm_key') or ''
+    if not key or not (query or '').strip():
+        return []
+    scope_value = cfg.get('write_scope') or cfg.get('scope') or ''
+    body = {
+        'query': query[:500],
+        'k': k,
+        'persona_id': cfg.get('persona_id') or 'dafeiyu',
+    }
+    if scope_value:
+        body['scope'] = scope_value
+    req = urllib.request.Request(
+        f"{cfg['lm_base']}/recall",
+        data=json.dumps(body, ensure_ascii=False).encode('utf-8'),
+        headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'},
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=float(cfg.get('lm_timeout') or 8)) as r:
+            data = json.loads(r.read().decode('utf-8', 'ignore'))
+    except Exception as e:
+        log(f'召回失败: {str(e)[:100]}')
+        return []
+
+    items = data.get('memories') or data.get('results') or data.get('items') or []
+    out = []
+    for it in items:
+        if isinstance(it, str):
+            out.append({'text': it, 'ts': 0, 'score': 0})
+        elif isinstance(it, dict):
+            text = it.get('content') or it.get('text') or it.get('memory')
+            if text:
+                out.append({
+                    'text': str(text),
+                    'ts': float(it.get('create_time') or 0),
+                    'score': float(it.get('score') or 0),
+                    'memory_id': it.get('memory_id'),
+                })
+    return out
+
+
+def range_memories(cfg: dict, start: float, end: float, limit: int = 8) -> list[dict]:
+    """直接按写入时间取某个区间的记忆（用于「昨晚」这类查询）。"""
+    db = _lm_db_path(cfg)
+    if not db.exists():
+        return []
+    a = datetime.datetime.fromtimestamp(start).strftime('%Y-%m-%d %H:%M:%S')
+    b = datetime.datetime.fromtimestamp(end).strftime('%Y-%m-%d %H:%M:%S')
+    try:
+        con = sqlite3.connect(f'file:{db}?mode=ro', uri=True, timeout=5)
+        con.row_factory = sqlite3.Row
+        rows = con.execute(
+            'select id, text, created_at from documents '
+            "where created_at between ? and ? and text not like '%SELFTEST-%' "
+            'order by created_at desc limit ?',
+            (a, b, limit),
+        ).fetchall()
+        con.close()
+        out = []
+        for r in rows:
+            try:
+                ts = datetime.datetime.strptime(r['created_at'][:19], '%Y-%m-%d %H:%M:%S').timestamp()
+            except Exception:
+                ts = 0
+            out.append({'text': r['text'] or '', 'ts': ts, 'score': 0, 'memory_id': r['id']})
+        return out
+    except Exception as e:
+        log(f'按时间取记忆失败: {str(e)[:80]}')
+        return []
+
+
+def _fmt_memory(item: dict) -> str:
+    text = (item.get('text') or '').replace('\n', ' ').strip()
+    ts = item.get('ts') or 0
+    if not ts:
+        return text
+    when = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M')
+    return f'[{when}] {text}'
+
+
+def recall_for_prompt(cfg: dict, query: str) -> list[str]:
+    """给提示词用的召回：带日期，且时间相关问题优先取区间内的记忆。"""
+    rng = timeparse.detect_range(query)
+    detailed = recall_detailed(cfg, query, k=min(max(int(cfg.get('recall_k') or 8) * 2, 12), 20))
+    merged = []
+    if rng:
+        merged.extend(range_memories(cfg, rng[0], rng[1]))
+        merged.extend(detailed)
+        log(f'时间召回: {timeparse.describe(rng[0], rng[1])}')
+    else:
+        merged = detailed
+
+    seen = set()
+    out = []
+    for item in merged:
+        key = (item.get('text') or '').strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(_fmt_memory(item))
+        if len(out) >= 12:
+            break
+    if _log_content(cfg):
+        log(f'带日期召回: {len(out)} 条')
+    return out
+
+
 # ---------------- 提炼 ----------------
 def _strip_fence(text: str) -> str:
     t = (text or '').strip()
@@ -209,7 +332,7 @@ def extract(cfg: dict, user_text: str, reply_text: str) -> list[dict]:
     body = {
         'model': ex.get('model') or up['model'],
         'messages': [
-            {'role': 'system', 'content': EXTRACT_PROMPT.format(max_n=max_n)},
+            {'role': 'system', 'content': EXTRACT_PROMPT.format(max_n=max_n, today=_today_str())},
             {'role': 'user', 'content': f'他说：{clean_for_extract(user_text)[:600]}\n她说：{clean_for_extract(reply_text)[:600]}'},
         ],
         'temperature': 0.1,

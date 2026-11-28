@@ -19,7 +19,7 @@ def fetch_context(cfg: dict, messages: list) -> dict:
         return result
 
     def get_memories():
-        result['memories'] = memory.recall(cfg, query)
+        result['memories'] = memory.recall_for_prompt(cfg, query)
 
     def get_kb():
         result['knowledge'] = knowledge.retrieve(cfg, query)
@@ -50,6 +50,9 @@ def build_blocks(ctx: dict) -> str:
         blocks.append(
             '【你现在想起来了的关于他的事】\n'
             f'{lines}\n'
+            '每条前面的方括号是这件事发生（或记录）的时间。'
+            '回答与时间有关的问题时，按这个日期说（例如「11 月 25 号那天」），'
+            '不要把旧事说成「昨天 / 最近」；如果日期和他问的对不上，就直接说那天没有记录，不要硬凑。'
             '这些是你确实知道的。如果其中有能回答上一条问题的内容，就直接说，'
             '不要因为之前说过"不知道"就继续不知道。'
             '（记忆可能过时，与他刚说的冲突时以他刚说的为准）'

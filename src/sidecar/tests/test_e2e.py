@@ -156,6 +156,7 @@ class E2ETest(unittest.TestCase):
             'knowledge': {'enabled': False, 'base_url': '', 'username': '', 'jwt_secret': '',
                           'kb_names': [], 'top_k': 3, 'timeout': 5, 'cache_seconds': 60},
             'outbox': {'enabled': True},
+            'lm_db': str(cls.tmp / 'no_lm.db'),
             'maintenance_mode': False,
         }
         (cls.tmp / 'config.json').write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding='utf-8')
