@@ -193,7 +193,8 @@ def verify_index(cfg: dict, limit: int = 5) -> int:
     con.row_factory = sqlite3.Row
     try:
         rows = con.execute(
-            "SELECT * FROM extractions WHERE status='written' AND coalesce(next_retry_at,0)<=? "
+            "SELECT * FROM extractions WHERE status='written' AND verified_at IS NULL "
+            'AND coalesce(next_retry_at,0)<=? '
             'ORDER BY id LIMIT ?',
             (time.time(), limit),
         ).fetchall()
@@ -219,7 +220,7 @@ def verify_index(cfg: dict, limit: int = 5) -> int:
                 tries = int(row['attempts'] or 0)
                 if tries >= INDEX_RETRY_LIMIT:
                     # 写入已成功，只是没在窗口内确认可检索：标为「未确认」，不算失败
-                    con.execute("UPDATE extractions SET status='index_unconfirmed' WHERE id=?", (row['id'],))
+                    con.execute("UPDATE extractions SET status='index_unconfirmed', next_retry_at=0 WHERE id=?", (row['id'],))
                     log(f"索引未确认（已重试 {tries} 次，写入本身成功）: {_mask(cfg, row['content'])}")
                 else:
                     con.execute(

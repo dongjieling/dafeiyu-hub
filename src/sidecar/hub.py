@@ -361,11 +361,11 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if self.path in ('/v1/memories/delete', '/memories/delete'):
-            self._drain_body()
+            body = self._body_json()
             if (CFG.get('memory_edit_enabled', True) is False):
                 self._json(403, {'ok': False, 'error': '记忆编辑已关闭（memory_edit_enabled=false）'})
                 return
-            self._json(200, memories.delete_memory(CFG, int((self._body_json() or {}).get('id') or 0)))
+            self._json(200, memories.delete_memory(CFG, int((body or {}).get('id') or 0)))
             return
 
         if self.path in ('/v1/patch/status', '/patch/status'):
@@ -513,6 +513,12 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     migration_ok = memory.init_archive(CFG)
+    try:
+        cleaned = memories.cleanup_index(CFG)
+        if any(v > 0 for v in cleaned.values() if isinstance(v, int)):
+            log(f'记忆索引清理: {cleaned}')
+    except Exception as e:
+        log(f'记忆索引清理失败: {str(e)[:80]}')
     report = refresh_compat(auto_patch=True, startup_checks=True, migration_ok=migration_ok)
     if report.get('overall') == 'fatal':
         failed = [k for k, v in report['contracts'].items() if v['severity'] == 'fatal']

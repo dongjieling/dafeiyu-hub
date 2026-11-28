@@ -78,20 +78,27 @@ def build_blocks(ctx: dict) -> str:
 
 
 def trim_messages(messages: list, max_messages: int = 40, max_chars: int = 24000) -> list:
-    """裁剪过长的历史，保留最近的对话；system 消息不占名额。"""
+    """裁剪过长的历史：保留最近对话，尽量从 user 开始，避免拆散提问/回答。"""
     if not messages:
         return messages
     systems = [m for m in messages if m.get('role') == 'system']
     chats = [m for m in messages if m.get('role') != 'system']
 
-    if max_messages and len(chats) > max_messages:
-        chats = chats[-max_messages:]
+    def too_much() -> bool:
+        if max_messages and len(chats) > max_messages:
+            return True
+        if max_chars and max_chars > 0:
+            total = sum(len(str(m.get('content') or '')) for m in chats)
+            if total > max_chars:
+                return True
+        return False
 
-    if max_chars and max_chars > 0:
-        total = sum(len(str(m.get('content') or '')) for m in chats)
-        while chats and total > max_chars:
-            dropped = chats.pop(0)
-            total -= len(str(dropped.get('content') or ''))
+    while chats and too_much():
+        chats.pop(0)
+
+    # 裁剪后不要以 assistant / tool 开头，避免上游把回答当提问
+    while chats and chats[0].get('role') not in ('user',):
+        chats.pop(0)
 
     return systems + chats
 

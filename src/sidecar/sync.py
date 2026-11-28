@@ -103,6 +103,8 @@ def sync_qq(cfg: dict) -> int:
         now = time.time()
         skipped = 0
         for r in rows:
+            # 游标先前进：以后即使跳过，也不会反复卡在同一批
+            cursor = max(cursor, int(r['id']))
             sid = r['session_id'] or ''
             if not sid:
                 continue
@@ -188,25 +190,8 @@ def start(cfg: dict) -> None:
                 log(f'同步循环异常: {e}')
             _stop.wait(intv)
 
-    def loop_retry():
-        time.sleep(20)
-        while not _stop.is_set():
-            try:
-                import memory
-                import retry as retry_mod
-
-                lm_ready = memory.probe_lm(cfg, force=True)['connected']
-                if not lm_ready:
-                    log('记忆库未就绪，本轮跳过重试（不消耗次数）')
-                else:
-                    retry_mod.retry_failed(cfg, lm_ready=True)
-            except Exception as e:
-                log(f'重试循环异常: {e}')
-            _stop.wait(retry_intv)
-
     threading.Thread(target=loop_sync, daemon=True, name='sync-qq').start()
-    threading.Thread(target=loop_retry, daemon=True, name='retry-failed').start()
-    log(f'后台任务已启动：QQ 同步每 {intv}s，失败重试每 {retry_intv}s')
+    log(f'后台任务已启动：QQ 同步每 {intv}s')
 
 
 def stop() -> None:

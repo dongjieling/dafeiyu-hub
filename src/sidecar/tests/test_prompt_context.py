@@ -29,7 +29,9 @@ class TrimTest(unittest.TestCase):
         out = self.prompt.trim_messages(msgs, max_messages=40, max_chars=999999)
         self.assertEqual(out[0]['role'], 'system')
         self.assertEqual(out[-1]['content'], 'm56')
-        self.assertEqual(len([m for m in out if m['role'] != 'system']), 40)
+        chats = [m for m in out if m['role'] != 'system']
+        self.assertLessEqual(len(chats), 40)
+        self.assertEqual(chats[0]['role'], 'user')
 
     def test_trim_by_chars(self):
         msgs = [{'role': 'user', 'content': 'x' * 100} for _ in range(10)]

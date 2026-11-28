@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import re
 import sqlite3
 import ssl
 import threading
@@ -143,6 +144,66 @@ def recall(cfg: dict, query: str) -> list[str]:
     return out
 
 
+_DATE_RE = re.compile(r'(20\d{2})\s*[-年/.]\s*(\d{1,2})\s*[-月/.]\s*(\d{1,2})')
+_MD_RE = re.compile(r'(?<!\d)(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]')
+
+
+def _event_ts(text: str, fallback: float) -> float:
+    """解析事件时间：绝对日期优先；相对时间沿用写入时刻（保留小时）。"""
+    t = text or ''
+    # 1) 绝对日期 + 可选时间
+    m = _DATE_RE.search(t)
+    if m:
+        hour, minute = 12, 0
+        tm = re.search(r'(\d{1,2})\s*[:：]\s*(\d{2})', t)
+        if tm:
+            hour, minute = int(tm.group(1)), int(tm.group(2))
+        try:
+            return datetime.datetime(
+                int(m.group(1)), int(m.group(2)), int(m.group(3)), hour, minute
+            ).timestamp()
+        except Exception:
+            pass
+    # 2) 只有 M月D日
+    m = _MD_RE.search(t)
+    if m:
+        try:
+            base = datetime.datetime.fromtimestamp(fallback)
+            return datetime.datetime(base.year, int(m.group(1)), int(m.group(2)), 12, 0).timestamp()
+        except Exception:
+            pass
+    # 3) 相对时间：写入时间通常就在事件附近，直接沿用
+    return fallback
+
+
+def _scope_allowed(cfg: dict, session_id: str) -> bool:
+    """时间通道也要遵守 scope：只允许本人私聊与桌面。"""
+    sid = (session_id or '').strip()
+    if not sid:
+        return False
+    if sid == 'desktop' or sid.startswith('desktop:'):
+        return True
+    scope = (cfg.get('write_scope') or cfg.get('scope') or '').strip()
+    if not scope:
+        return 'GroupMessage' not in sid
+    if sid == scope:
+        return True
+    # 其他私聊（同前缀不同 QQ）不算，避免把别人的事当他的
+    return False
+
+
+def _relevance(query: str, text: str) -> float:
+    """粗排：字符/词重合 + 序列相似度，避免时间通道把闲聊顶到前面。"""
+    import quality
+
+    q = (query or '').strip()
+    t = (text or '').strip()
+    if not q or not t:
+        return 0.0
+    overlap = sum(1 for ch in set(q) if ch in t)
+    return overlap / max(len(set(q)), 1) * 0.6 + quality.similar(q, t) * 0.4
+
+
 def _today_str() -> str:
     return datetime.datetime.now().strftime('%Y-%m-%d')
 
@@ -197,34 +258,54 @@ def recall_detailed(cfg: dict, query: str, k: int = 16) -> list[dict]:
     return out
 
 
-def range_memories(cfg: dict, start: float, end: float, limit: int = 8) -> list[dict]:
-    """直接按写入时间取某个区间的记忆（用于「昨晚」这类查询）。"""
+def range_memories(cfg: dict, start: float, end: float, query: str = '', limit: int = 8) -> list[dict]:
+    """按「事件时间」取区间记忆，并过滤 scope。"""
     db = _lm_db_path(cfg)
     if not db.exists():
         return []
-    a = datetime.datetime.fromtimestamp(start).strftime('%Y-%m-%d %H:%M:%S')
-    b = datetime.datetime.fromtimestamp(end).strftime('%Y-%m-%d %H:%M:%S')
+    # 写入时间可能晚于事件时间（跨午夜提炼），先放宽窗口再按事件时间过滤
+    a = datetime.datetime.fromtimestamp(start - 5 * 86400).strftime('%Y-%m-%d %H:%M:%S')
+    b = datetime.datetime.fromtimestamp(end + 5 * 86400).strftime('%Y-%m-%d %H:%M:%S')
     try:
         con = sqlite3.connect(f'file:{db}?mode=ro', uri=True, timeout=5)
         con.row_factory = sqlite3.Row
         rows = con.execute(
-            'select id, text, created_at from documents '
+            'select id, text, metadata, created_at from documents '
             "where created_at between ? and ? and text not like '%SELFTEST-%' "
-            'order by created_at desc limit ?',
-            (a, b, limit),
+            'order by created_at desc limit 400',
+            (a, b),
         ).fetchall()
         con.close()
-        out = []
-        for r in rows:
-            try:
-                ts = datetime.datetime.strptime(r['created_at'][:19], '%Y-%m-%d %H:%M:%S').timestamp()
-            except Exception:
-                ts = 0
-            out.append({'text': r['text'] or '', 'ts': ts, 'score': 0, 'memory_id': r['id']})
-        return out
     except Exception as e:
         log(f'按时间取记忆失败: {str(e)[:80]}')
         return []
+
+    out = []
+    for r in rows:
+        try:
+            fallback = datetime.datetime.strptime(r['created_at'][:19], '%Y-%m-%d %H:%M:%S').timestamp()
+        except Exception:
+            fallback = 0
+        try:
+            meta = json.loads(r['metadata'] or '{}')
+        except Exception:
+            meta = {}
+        sid = meta.get('session_id') or meta.get('adapter_id') or ''
+        if not _scope_allowed(cfg, str(sid)):
+            continue
+        text = r['text'] or ''
+        ev = _event_ts(text, fallback)
+        if not (start <= ev <= end):
+            continue
+        out.append({
+            'text': text,
+            'ts': ev,
+            'score': _relevance(query, text),
+            'memory_id': r['id'],
+        })
+
+    out.sort(key=lambda x: (x['score'], x['ts']), reverse=True)
+    return out[:limit]
 
 
 def _fmt_memory(item: dict) -> str:
@@ -232,7 +313,7 @@ def _fmt_memory(item: dict) -> str:
     ts = item.get('ts') or 0
     if not ts:
         return text
-    when = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M')
+    when = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d')
     return f'[{when}] {text}'
 
 
@@ -242,7 +323,7 @@ def recall_for_prompt(cfg: dict, query: str) -> list[str]:
     detailed = recall_detailed(cfg, query, k=min(max(int(cfg.get('recall_k') or 8) * 2, 12), 20))
     merged = []
     if rng:
-        merged.extend(range_memories(cfg, rng[0], rng[1]))
+        merged.extend(range_memories(cfg, rng[0], rng[1], query=query))
         merged.extend(detailed)
         log(f'时间召回: {timeparse.describe(rng[0], rng[1])}')
     else:
@@ -355,7 +436,10 @@ def extract(cfg: dict, user_text: str, reply_text: str) -> list[dict]:
             return []
         items = parse_extract_json(raw)
         if not items:
-            log(f'提炼无可解析结果，返回片段: {raw[:60]!r}')
+            if '[]' in raw.replace(' ', '') or not raw.strip():
+                log('提炼结果为空（本轮没有需要记的内容）')
+            else:
+                log(f'提炼无可解析结果，返回片段: {raw[:60]!r}')
             return []
     except Exception as e:
         log(f'提炼失败: {str(e)[:100]}')
@@ -627,8 +711,8 @@ def schedule_memory_job(cfg: dict, user_text: str, reply_text: str, trace: str =
                 return
             t_ex = time.time()
             items = extract(cfg, user_text, reply_text)
-            telemetry.record('extract', 'ok' if items else 'empty',
-                             int((time.time() - t_ex) * 1000), f'{len(items)} 条', trace)
+            telemetry.record('extract', 'ok', int((time.time() - t_ex) * 1000),
+                             f'{len(items)} 条' + ('' if items else '（无需记忆）'), trace)
             if not items:
                 return
             queued = write_back(cfg, items, f'airi:msg{mid or int(time.time())}', mid)

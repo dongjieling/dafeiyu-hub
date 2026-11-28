@@ -48,6 +48,24 @@ class TimeParseTest(unittest.TestCase):
         self.assertEqual(self.fmt(rng[0]), '2026-11-16 00:00')
         self.assertEqual(self.fmt(rng[1]), '2026-11-22 23:59')
 
+    def test_absolute_date(self):
+        rng = self.tp.detect_range('11月25号吃了什么', self.now)
+        self.assertEqual(self.fmt(rng[0]), '2026-11-25 00:00')
+        self.assertEqual(self.fmt(rng[1]), '2026-11-25 23:59')
+
+    def test_weekday(self):
+        rng = self.tp.detect_range('上周三干嘛了', self.now)
+        self.assertEqual(self.fmt(rng[0]), '2026-11-18 00:00')
+
+    def test_last_night_hour(self):
+        rng = self.tp.detect_range('昨晚十点', self.now)
+        self.assertEqual(self.fmt(rng[0]), '2026-11-27 22:00')
+        self.assertEqual(self.fmt(rng[1]), '2026-11-28 00:00')
+
+    def test_greeting_not_time(self):
+        self.assertIsNone(self.tp.detect_range('最近好吗', self.now))
+        self.assertIsNotNone(self.tp.detect_range('最近几天怎么样', self.now))
+
     def test_no_range(self):
         self.assertIsNone(self.tp.detect_range('你喜欢吃什么', self.now))
 
@@ -69,9 +87,11 @@ class RangeMemoriesTest(unittest.TestCase):
             ('【自检】SELFTEST-1', '2026-11-27 23:00:00'),
             ('上周的事', '2026-11-20 10:00:00'),
         ]
+        import json as _json
+        meta = _json.dumps({'session_id': 'desktop'})
         for text, ts in rows:
             con.execute('insert into documents(doc_id,text,metadata,created_at,updated_at) values(?,?,?,?,?)',
-                        (text, text, '{}', ts, ts))
+                        (text, text, meta, ts, ts))
         con.commit()
         con.close()
         self.cfg = {'lm_db': str(self.db)}
@@ -89,8 +109,49 @@ class RangeMemoriesTest(unittest.TestCase):
 
     def test_format_has_date(self):
         text = self.mem._fmt_memory({'text': '测试内容', 'ts': datetime.datetime(2026, 11, 27, 22, 0).timestamp()})
-        self.assertTrue(text.startswith('[2026-11-27 22:00]'))
+        self.assertTrue(text.startswith('[2026-11-27]'))
         self.assertIn('测试内容', text)
+
+
+class ScopeAndEventTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix='hub_scope_time_'))
+        self.mem = fresh_env(self.tmp, ('config', 'crypto', 'memory', 'timeparse'))['memory']
+        self.db = self.tmp / 'lm.db'
+        con = sqlite3.connect(self.db)
+        con.executescript(
+            'create table documents (id integer primary key autoincrement, doc_id text, text text, '
+            'metadata text, created_at text, updated_at text);'
+        )
+        import json as _json
+        rows = [
+            ('他 2026-11-25 去医院了', _json.dumps({'session_id': '一号:FriendMessage:1'}), '2026-11-28 00:30:00'),
+            ('他在群里说的', _json.dumps({'session_id': '一号:GroupMessage:9'}), '2026-11-27 20:00:00'),
+            ('别人私聊说的', _json.dumps({'session_id': '一号:FriendMessage:999'}), '2026-11-27 21:00:00'),
+            ('桌面端说的', _json.dumps({'session_id': 'desktop'}), '2026-11-27 22:00:00'),
+        ]
+        for text, meta, ts in rows:
+            con.execute('insert into documents(doc_id,text,metadata,created_at,updated_at) values(?,?,?,?,?)',
+                        (text, text, meta, ts, ts))
+        con.commit()
+        con.close()
+        self.cfg = {'lm_db': str(self.db), 'write_scope': '一号:FriendMessage:1'}
+
+    def test_scope_filter(self):
+        start = datetime.datetime(2026, 11, 27, 18, 0).timestamp()
+        end = datetime.datetime(2026, 11, 28, 6, 0).timestamp()
+        items = self.mem.range_memories(self.cfg, start, end, query='说的')
+        texts = [i['text'] for i in items]
+        self.assertIn('桌面端说的', texts)
+        self.assertNotIn('他在群里说的', texts)
+        self.assertNotIn('别人私聊说的', texts)
+
+    def test_event_time_beats_write_time(self):
+        start = datetime.datetime(2026, 11, 25, 0, 0).timestamp()
+        end = datetime.datetime(2026, 11, 25, 23, 59).timestamp()
+        items = self.mem.range_memories(self.cfg, start, end, query='医院')
+        self.assertEqual(len(items), 1)
+        self.assertTrue(self.mem._fmt_memory(items[0]).startswith('[2026-11-25]'))
 
 
 if __name__ == '__main__':

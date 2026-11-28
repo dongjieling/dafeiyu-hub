@@ -121,6 +121,16 @@ def archive_stats(db: Path) -> dict:
         con.close()
 
 
+def prune_backups(db: Path, keep: int = 5) -> None:
+    """只保留最近几份备份，避免无限增长。"""
+    try:
+        backups = sorted(db.parent.glob(db.name + '.bak_*'), key=lambda p: p.stat().st_mtime, reverse=True)
+        for old in backups[keep:]:
+            old.unlink(missing_ok=True)
+    except Exception as e:
+        log(f'清理旧备份失败: {str(e)[:60]}')
+
+
 def ensure_archive(db: Path, backup: bool = True) -> MigrationResult:
     """确保归档库结构与代码版本一致。"""
     if not db.exists():
@@ -135,6 +145,16 @@ def ensure_archive(db: Path, backup: bool = True) -> MigrationResult:
         log(f'归档库初始化完成（version={ARCHIVE_SCHEMA_VERSION}）')
         return MigrationResult(True, ARCHIVE_SCHEMA_VERSION, ['init'])
 
+    # 先看版本：已经是最新就不备份；只有需要迁移时才备份
+    try:
+        peek = sqlite3.connect(f'file:{db}?mode=ro', uri=True, timeout=10)
+        current = _user_version(peek)
+        peek.close()
+    except Exception:
+        current = 0
+    if current == ARCHIVE_SCHEMA_VERSION:
+        return MigrationResult(True, current, [], '')
+
     backup_path = ''
     if backup:
         backup_path = f'{db}.bak_{time.strftime("%Y%m%d%H%M%S")}'
@@ -143,6 +163,7 @@ def ensure_archive(db: Path, backup: bool = True) -> MigrationResult:
         except Exception as e:
             log(f'迁移前备份失败，终止迁移: {e}')
             return MigrationResult(False, _user_version(sqlite3.connect(db)), [], '', f'备份失败: {e}')
+        prune_backups(db, keep=5)
 
     con = sqlite3.connect(db, timeout=20)
     try:

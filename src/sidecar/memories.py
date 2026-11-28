@@ -37,6 +37,12 @@ def _backup(db: Path) -> str:
     finally:
         dst.close()
         src.close()
+    try:
+        backups = sorted(db.parent.glob(db.name + '.bak_*'), key=lambda p: p.stat().st_mtime, reverse=True)
+        for old in backups[5:]:
+            old.unlink(missing_ok=True)
+    except Exception:
+        pass
     return str(dest)
 
 
@@ -149,6 +155,32 @@ def list_memories(
         con.close()
 
 
+def cleanup_index(cfg: dict) -> dict:
+    """清理没有对应文档的 FTS 幽灵条目（只读扫、可写清）。"""
+    db = _lm_path(cfg)
+    if not db.exists():
+        return {}
+    out = {}
+    con = sqlite3.connect(db, timeout=20)
+    try:
+        con.execute('begin')
+        for table in ('documents_fts', 'livingmemory_memories_fts'):
+            try:
+                n = con.execute(
+                    f'delete from {table} where rowid not in (select id from documents)'
+                ).rowcount
+                out[table] = n
+            except Exception:
+                out[table] = -1
+        con.commit()
+    except Exception as e:
+        con.rollback()
+        out['error'] = str(e)[:80]
+    finally:
+        con.close()
+    return out
+
+
 def delete_memory(cfg: dict, doc_id: int) -> dict:
     db = _lm_path(cfg)
     if not db.exists():
@@ -165,6 +197,11 @@ def delete_memory(cfg: dict, doc_id: int) -> dict:
         con.execute('begin')
         try:
             con.execute('delete from documents_fts where rowid=?', (row['id'],))
+            # 插件自己的记忆索引（存在就一起清，避免幽灵条目）
+            try:
+                con.execute('delete from livingmemory_memories_fts where rowid=?', (row['id'],))
+            except Exception:
+                pass
             con.execute('delete from memory_atoms where parent_memory_id=?', (row['id'],))
             con.execute('delete from graph_entries where source_memory_id=?', (row['id'],))
             con.execute('delete from documents where id=?', (row['id'],))
