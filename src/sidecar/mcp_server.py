@@ -17,6 +17,10 @@ import sys
 import time
 from pathlib import Path
 
+# MCP 的 stdout 只能放协议 JSON；日志统一走 stderr
+_PROTO = sys.stdout
+sys.stdout = sys.stderr
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import clients as clients_mod  # noqa: E402
@@ -26,6 +30,11 @@ from memories import list_memories  # noqa: E402
 from persona import read_persona  # noqa: E402
 
 PROTOCOL_VERSION = '2024-11-05'
+
+RESOURCES = [
+    {'uri': 'persona://current', 'name': '当前人格', 'mimeType': 'text/plain'},
+    {'uri': 'memory://recent', 'name': '最近记忆', 'mimeType': 'application/json'},
+]
 
 TOOLS = [
     {
@@ -135,6 +144,18 @@ def call_tool(name: str, args: dict) -> dict:
     raise ValueError(f'未知工具: {name}')
 
 
+def read_resource(uri: str) -> dict:
+    cfg = active_cfg()
+    if uri == 'persona://current':
+        text = read_persona(cfg)
+        return {'contents': [{'uri': uri, 'mimeType': 'text/plain', 'text': text}]}
+    if uri == 'memory://recent':
+        res = list_memories(cfg, '', 10)
+        return {'contents': [{'uri': uri, 'mimeType': 'application/json',
+                              'text': json.dumps(res, ensure_ascii=False)}]}
+    raise ValueError(f'未知资源: {uri}')
+
+
 def handle(msg: dict) -> dict | None:
     method = msg.get('method') or ''
     mid = msg.get('id')
@@ -144,7 +165,7 @@ def handle(msg: dict) -> dict | None:
             'id': mid,
             'result': {
                 'protocolVersion': PROTOCOL_VERSION,
-                'capabilities': {'tools': {}},
+                'capabilities': {'tools': {}, 'resources': {}},
                 'serverInfo': {'name': 'dafeiyu-memory', 'version': '1.3.0'},
             },
         }
@@ -152,6 +173,15 @@ def handle(msg: dict) -> dict | None:
         return None
     if method == 'tools/list':
         return {'jsonrpc': '2.0', 'id': mid, 'result': {'tools': TOOLS}}
+    if method == 'resources/list':
+        return {'jsonrpc': '2.0', 'id': mid, 'result': {'resources': RESOURCES}}
+    if method == 'resources/read':
+        uri = (msg.get('params') or {}).get('uri') or ''
+        try:
+            return {'jsonrpc': '2.0', 'id': mid, 'result': read_resource(uri)}
+        except Exception as e:
+            return {'jsonrpc': '2.0', 'id': mid,
+                    'error': {'code': -32602, 'message': str(e)}}
     if method == 'tools/call':
         params = msg.get('params') or {}
         try:
@@ -170,6 +200,11 @@ def handle(msg: dict) -> dict | None:
     }
 
 
+def _write(obj: dict) -> None:
+    _PROTO.write(json.dumps(obj, ensure_ascii=False) + '\n')
+    _PROTO.flush()
+
+
 def main() -> None:
     for line in sys.stdin:
         line = line.strip()
@@ -178,12 +213,12 @@ def main() -> None:
         try:
             msg = json.loads(line)
         except Exception:
-            print(json.dumps({'jsonrpc': '2.0', 'id': None,
-                              'error': {'code': -32700, 'message': 'JSON 解析失败'}}, ensure_ascii=False), flush=True)
+            _write({'jsonrpc': '2.0', 'id': None,
+                    'error': {'code': -32700, 'message': 'JSON 解析失败'}})
             continue
         out = handle(msg)
         if out is not None:
-            print(json.dumps(out, ensure_ascii=False), flush=True)
+            _write(out)
 
 
 if __name__ == '__main__':

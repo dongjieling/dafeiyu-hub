@@ -46,6 +46,14 @@ class McpTest(unittest.TestCase):
         names = {t['name'] for t in res['result']['tools']}
         self.assertEqual(names, {'memory_recall', 'memory_list', 'persona_get', 'memory_health'})
 
+    def test_resources(self):
+        res = self.send({'jsonrpc': '2.0', 'id': 10, 'method': 'resources/list', 'params': {}})
+        uris = {r['uri'] for r in res['result']['resources']}
+        self.assertIn('persona://current', uris)
+        res = self.send({'jsonrpc': '2.0', 'id': 11, 'method': 'resources/read',
+                         'params': {'uri': 'persona://current'}})
+        self.assertTrue(res['result']['contents'][0]['text'])
+
     def test_unknown_method(self):
         res = self.send({'jsonrpc': '2.0', 'id': 3, 'method': 'nope'})
         self.assertEqual(res['error']['code'], -32601)
