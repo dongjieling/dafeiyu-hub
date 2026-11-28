@@ -1082,9 +1082,15 @@ function clientsStatus(text) {
 }
 
 async function loadClients() {
+  clientsStatus('加载中…');
   try {
     const data = await window.hub.clientsGet();
-    if (data && !data.error) renderClients(data);
+    if (!data || data.error) {
+      clientsStatus('读取失败: ' + ((data && data.error) || '空响应'));
+      return;
+    }
+    renderClients(data);
+    clientsStatus('共 ' + ((data.clients || []).length) + ' 个客户端');
   } catch (e) {
     clientsStatus('读取失败: ' + e.message);
   }
@@ -1146,7 +1152,6 @@ if (mcpBtn) {
       const res = await window.hub.mcpRegister();
       if (!res || res.ok === false) throw new Error((res && res.error) || '注册失败');
       await refreshMcpStatus();
-    setTimeout(() => { refreshMcpStatus(); }, 2500);
     }, { success: '已注册到 AstrBot MCP' })
   );
 }
@@ -1170,15 +1175,25 @@ setInterval(() => {
   } catch {
     /* 忽略 */
   }
-  try {
-    await loadConfig();
-    await loadArchiveConfig();
-    await loadClients();
-    await refreshMcpStatus();
-    setTimeout(() => { refreshMcpStatus(); }, 2500);
-    await refresh();
-    await refreshPatch();
-  } catch (e) {
-    appendLog('[ui!] 初始化失败: ' + (e && e.message));
+  const steps = [
+    ['配置', () => loadConfig()],
+    ['归档', () => loadArchiveConfig()],
+    ['客户端', () => loadClients()],
+    ['MCP', () => refreshMcpStatus()],
+    ['状态', () => refresh()],
+    ['补丁', () => refreshPatch()],
+  ];
+  for (const [name, fn] of steps) {
+    try {
+      await fn();
+    } catch (e) {
+      appendLog('[ui!] ' + name + '加载失败: ' + (e && e.message));
+    }
+  }
+  setTimeout(() => { refreshMcpStatus(); }, 2500);
+  for (const delay of [3000, 8000]) {
+    setTimeout(() => {
+      if (!document.querySelector('#clients-list .client-row')) loadClients();
+    }, delay);
   }
 })();
